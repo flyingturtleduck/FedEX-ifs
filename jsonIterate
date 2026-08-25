@@ -1,3 +1,65 @@
+
+CREATE OR REPLACE PROCEDURE parse_rate_response (
+   p_json   IN  CLOB
+)
+IS
+   PROCEDURE hdr(p_title VARCHAR2) IS
+   BEGIN
+      DBMS_OUTPUT.PUT_LINE('');
+      DBMS_OUTPUT.PUT_LINE(RPAD('=', 152, '='));
+      DBMS_OUTPUT.PUT_LINE('  ' || p_title);
+      DBMS_OUTPUT.PUT_LINE(RPAD('=', 152, '='));
+   END hdr;
+
+   PROCEDURE fld(p_label VARCHAR2, p_value VARCHAR2) IS
+   BEGIN
+      DBMS_OUTPUT.PUT_LINE('  ' || RPAD(p_label, 26) || NVL(p_value, '(none)'));
+   END fld;
+
+   PROCEDURE col_hdr IS
+   BEGIN
+      DBMS_OUTPUT.PUT_LINE(
+         RPAD('CARRIER',8)   || '  ' || RPAD('CARRIER NAME',32)  || '  ' ||
+         RPAD('SVC CODE',8)  || '  ' || RPAD('SHIP VIA',30)      || '  ' ||
+         RPAD('RATE TYPE',20)|| '  ' || LPAD('TOTAL COST',12)    || '  ' ||
+         LPAD('TOTAL PRICE',12)      || '  ' || LPAD('LIST PRICE',12) || '  ' ||
+         RPAD('CURR',4)      || '  ' || 'ARRIVAL DATE'
+      );
+      DBMS_OUTPUT.PUT_LINE(RPAD('-', 152, '-'));
+   END col_hdr;
+
+   PROCEDURE put_row(
+      p_carrier VARCHAR2, p_name VARCHAR2, p_svc_code VARCHAR2,
+      p_ship_via VARCHAR2, p_rate_type VARCHAR2,
+      p_cost NUMBER, p_price NUMBER, p_list NUMBER,
+      p_curr VARCHAR2, p_arr_date VARCHAR2
+   ) IS
+   BEGIN
+      DBMS_OUTPUT.PUT_LINE(
+         RPAD(p_carrier,8) || '  ' || RPAD(p_name,32) || '  ' ||
+         RPAD(NVL(p_svc_code,'?'),8) || '  ' || RPAD(p_ship_via,30) || '  ' ||
+         RPAD(p_rate_type,20) || '  ' ||
+         LPAD(TO_CHAR(p_cost, 'FM999990.00'),12)  || '  ' ||
+         LPAD(TO_CHAR(p_price,'FM999990.00'),12)  || '  ' ||
+         LPAD(TO_CHAR(p_list, 'FM999990.00'),12)  || '  ' ||
+         RPAD(p_curr,4) || '  ' || NVL(p_arr_date,'N/A')
+      );
+   END put_row;
+
+   PROCEDURE put_detail(
+      p_carrier VARCHAR2, p_name VARCHAR2, p_svc_code VARCHAR2,
+      p_ship_via VARCHAR2, p_cost NUMBER, p_price NUMBER,
+      p_list NUMBER, p_curr VARCHAR2, p_arr_date VARCHAR2
+   ) IS
+   BEGIN
+      fld('Carrier',              p_carrier);
+      fld('Carrier Name',         p_name);
+      fld('Carrier Service Code', NVL(p_svc_code,'N/A'));
+      fld('Ship Via',             p_ship_via);
+      fld('Total Cost',           TO_CHAR(p_cost, 'FM999990.00') || ' ' || p_curr);
+      fld('Total Price',          TO_CHAR(p_price,'FM999990.00') || ' ' || p_curr);
+      fld('Total List Price',     TO_CHAR(p_list, 'FM999990.00') || ' ' || p_curr);
+      fld('Currency Code',        p_curr);
       fld('Arrival Date',         NVL(p_arr_date,'N/A'));
    END put_detail;
 
@@ -11,11 +73,11 @@ BEGIN
    col_hdr;
 
    FOR r IN (
-      WITH raw AS (
+      WITH rate_raw AS (
          /*
           * Flatten rateReplyDetails[*] × ratedShipmentDetails[*].
           *
-          * FEDEX_GROUND structural anomaly: its serviceDescription,
+          * DEMO_GROUND structural anomaly: its serviceDescription,
           * operationalDetail, and commit are nested inside the last
           * ratedShipmentDetails element instead of at service level.
           * nested_* columns capture them; window MAX() propagates
@@ -62,11 +124,11 @@ BEGIN
       list_px AS (
          -- List price per service — shown on every rate row for that service
          SELECT service_type, total_net_charge AS list_price
-         FROM   raw
+         FROM   rate_raw
          WHERE  rate_type = 'LIST'
       )
       SELECT
-         'FEDEX'                AS carrier,
+         'DEMO'                AS carrier,
          r.service_name,
          r.carrier_svc_code,
          r.service_type         AS ship_via,
@@ -76,7 +138,7 @@ BEGIN
          NVL(lp.list_price, 0) AS list_price,
          r.currency,
          r.arrival_date
-      FROM      raw     r
+      FROM      rate_raw     r
       LEFT JOIN list_px lp ON lp.service_type = r.service_type
       ORDER BY
          r.service_type,
@@ -97,7 +159,7 @@ BEGIN
    hdr('LOWEST COST OPTION  (minimum ACCOUNT totalNetCharge)');
 
    FOR r IN (
-      WITH raw AS (
+      WITH rate_raw AS (
          SELECT
             jt.service_type, jt.service_name, jt.rate_type,
             jt.total_base_charge, jt.total_net_charge, jt.currency,
@@ -128,14 +190,14 @@ BEGIN
       ),
       list_px AS (
          SELECT service_type, total_net_charge AS list_price
-         FROM   raw WHERE rate_type = 'LIST'
+         FROM   rate_raw WHERE rate_type = 'LIST'
       ),
       ranked AS (
-         SELECT 'FEDEX' AS carrier, r.service_name, r.carrier_svc_code,
+         SELECT 'DEMO' AS carrier, r.service_name, r.carrier_svc_code,
                 r.service_type, r.total_base_charge, r.total_net_charge,
                 NVL(lp.list_price,0) AS list_price, r.currency, r.arrival_date,
                 RANK() OVER (ORDER BY r.total_net_charge ASC) AS rnk
-         FROM      raw r
+         FROM      rate_raw r
          LEFT JOIN list_px lp ON lp.service_type = r.service_type
          WHERE     r.rate_type = 'ACCOUNT'
       )
@@ -154,7 +216,7 @@ BEGIN
    hdr('FASTEST OPTION  (earliest commit date, ACCOUNT rate)');
 
    FOR r IN (
-      WITH raw AS (
+      WITH rate_raw AS (
          SELECT
             jt.service_type, jt.service_name, jt.rate_type,
             jt.total_base_charge, jt.total_net_charge, jt.currency,
@@ -185,10 +247,10 @@ BEGIN
       ),
       list_px AS (
          SELECT service_type, total_net_charge AS list_price
-         FROM   raw WHERE rate_type = 'LIST'
+         FROM   rate_raw WHERE rate_type = 'LIST'
       ),
       ranked AS (
-         SELECT 'FEDEX' AS carrier, r.service_name, r.carrier_svc_code,
+         SELECT 'DEMO' AS carrier, r.service_name, r.carrier_svc_code,
                 r.service_type, r.total_base_charge, r.total_net_charge,
                 NVL(lp.list_price,0) AS list_price, r.currency, r.arrival_date,
                 RANK() OVER (
@@ -199,7 +261,7 @@ BEGIN
                            ELSE DATE '9999-12-31'
                       END ASC
                 ) AS rnk
-         FROM      raw r
+         FROM      rate_raw r
          LEFT JOIN list_px lp ON lp.service_type = r.service_type
          WHERE     r.rate_type = 'ACCOUNT'
       )
@@ -214,18 +276,4 @@ EXCEPTION
    WHEN OTHERS THEN
       DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
       RAISE;
-END fedex_parse_rate_response;
-/
-
----
-
-How to call it:
-DECLARE
-   l_json CLOB;
-BEGIN
-   l_json := q'[{ ...paste RespJson.txt content here... }]';
-   fedex_parse_rate_response(l_json);
-END;
-/
-
----
+END parse_rate_response;
