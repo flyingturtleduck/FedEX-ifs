@@ -1,0 +1,231 @@
+      fld('Arrival Date',         NVL(p_arr_date,'N/A'));
+   END put_detail;
+
+BEGIN
+   DBMS_OUTPUT.ENABLE(1000000);
+
+   -- ================================================================
+   -- 1. ALL RATE DETAILS  (one row per service × rate type)
+   -- ================================================================
+   hdr('ALL RATE DETAILS');
+   col_hdr;
+
+   FOR r IN (
+      WITH raw AS (
+         /*
+          * Flatten rateReplyDetails[*] × ratedShipmentDetails[*].
+          *
+          * FEDEX_GROUND structural anomaly: its serviceDescription,
+          * operationalDetail, and commit are nested inside the last
+          * ratedShipmentDetails element instead of at service level.
+          * nested_* columns capture them; window MAX() propagates
+          * the non-null value to all rate rows of the same service.
+          */
+         SELECT
+            jt.service_type,
+            jt.service_name,
+            jt.rate_type,
+            jt.total_base_charge,
+            jt.total_net_charge,
+            jt.currency,
+            COALESCE(
+               jt.svc_desc_code,
+               jt.op_svc_code,
+               MAX(jt.nested_svc_code) OVER (PARTITION BY jt.service_type)
+            ) AS carrier_svc_code,
+            COALESCE(
+               jt.commit_date,
+               MAX(jt.nested_commit_dt) OVER (PARTITION BY jt.service_type),
+               MAX(jt.nested_op_commit) OVER (PARTITION BY jt.service_type)
+            ) AS arrival_date
+         FROM JSON_TABLE(
+            p_json,
+            '$.output.rateReplyDetails[*]'
+            COLUMNS (
+               service_type  VARCHAR2(100) PATH '$.serviceType',
+               service_name  VARCHAR2(200) PATH '$.serviceName',
+               op_svc_code   VARCHAR2(20)  PATH '$.operationalDetail.serviceCode',
+               svc_desc_code VARCHAR2(20)  PATH '$.serviceDescription.code',
+               commit_date   VARCHAR2(50)  PATH '$.commit.dateDetail.dayCxsFormat',
+               NESTED PATH '$.ratedShipmentDetails[*]' COLUMNS (
+                  rate_type         VARCHAR2(50) PATH '$.rateType',
+                  total_base_charge NUMBER       PATH '$.totalBaseCharge',
+                  total_net_charge  NUMBER       PATH '$.totalNetCharge',
+                  currency          VARCHAR2(10) PATH '$.currency',
+                  nested_svc_code   VARCHAR2(20) PATH '$.serviceDescription.code',
+                  nested_commit_dt  VARCHAR2(50) PATH '$.commit.dateDetail.dayCxsFormat',
+                  nested_op_commit  VARCHAR2(50) PATH '$.operationalDetail.commitDate'
+               )
+            )
+         ) jt
+      ),
+      list_px AS (
+         -- List price per service — shown on every rate row for that service
+         SELECT service_type, total_net_charge AS list_price
+         FROM   raw
+         WHERE  rate_type = 'LIST'
+      )
+      SELECT
+         'FEDEX'                AS carrier,
+         r.service_name,
+         r.carrier_svc_code,
+         r.service_type         AS ship_via,
+         r.rate_type,
+         r.total_base_charge,
+         r.total_net_charge,
+         NVL(lp.list_price, 0) AS list_price,
+         r.currency,
+         r.arrival_date
+      FROM      raw     r
+      LEFT JOIN list_px lp ON lp.service_type = r.service_type
+      ORDER BY
+         r.service_type,
+         DECODE(r.rate_type,
+            'ACCOUNT',             1,
+            'LIST',                2,
+            'PREFERRED_INCENTIVE', 3,
+            'PREFERRED_CURRENCY',  4, 9)
+   ) LOOP
+      put_row(r.carrier, r.service_name, r.carrier_svc_code, r.ship_via,
+              r.rate_type, r.total_base_charge, r.total_net_charge,
+              r.list_price, r.currency, r.arrival_date);
+   END LOOP;
+
+   -- ================================================================
+   -- 2. LOWEST COST OPTION  (min ACCOUNT totalNetCharge)
+   -- ================================================================
+   hdr('LOWEST COST OPTION  (minimum ACCOUNT totalNetCharge)');
+
+   FOR r IN (
+      WITH raw AS (
+         SELECT
+            jt.service_type, jt.service_name, jt.rate_type,
+            jt.total_base_charge, jt.total_net_charge, jt.currency,
+            COALESCE(jt.svc_desc_code, jt.op_svc_code,
+                     MAX(jt.nested_svc_code) OVER (PARTITION BY jt.service_type)) AS carrier_svc_code,
+            COALESCE(jt.commit_date,
+                     MAX(jt.nested_commit_dt) OVER (PARTITION BY jt.service_type),
+                     MAX(jt.nested_op_commit) OVER (PARTITION BY jt.service_type)) AS arrival_date
+         FROM JSON_TABLE(
+            p_json, '$.output.rateReplyDetails[*]'
+            COLUMNS (
+               service_type  VARCHAR2(100) PATH '$.serviceType',
+               service_name  VARCHAR2(200) PATH '$.serviceName',
+               op_svc_code   VARCHAR2(20)  PATH '$.operationalDetail.serviceCode',
+               svc_desc_code VARCHAR2(20)  PATH '$.serviceDescription.code',
+               commit_date   VARCHAR2(50)  PATH '$.commit.dateDetail.dayCxsFormat',
+               NESTED PATH '$.ratedShipmentDetails[*]' COLUMNS (
+                  rate_type         VARCHAR2(50) PATH '$.rateType',
+                  total_base_charge NUMBER       PATH '$.totalBaseCharge',
+                  total_net_charge  NUMBER       PATH '$.totalNetCharge',
+                  currency          VARCHAR2(10) PATH '$.currency',
+                  nested_svc_code   VARCHAR2(20) PATH '$.serviceDescription.code',
+                  nested_commit_dt  VARCHAR2(50) PATH '$.commit.dateDetail.dayCxsFormat',
+                  nested_op_commit  VARCHAR2(50) PATH '$.operationalDetail.commitDate'
+               )
+            )
+         ) jt
+      ),
+      list_px AS (
+         SELECT service_type, total_net_charge AS list_price
+         FROM   raw WHERE rate_type = 'LIST'
+      ),
+      ranked AS (
+         SELECT 'FEDEX' AS carrier, r.service_name, r.carrier_svc_code,
+                r.service_type, r.total_base_charge, r.total_net_charge,
+                NVL(lp.list_price,0) AS list_price, r.currency, r.arrival_date,
+                RANK() OVER (ORDER BY r.total_net_charge ASC) AS rnk
+         FROM      raw r
+         LEFT JOIN list_px lp ON lp.service_type = r.service_type
+         WHERE     r.rate_type = 'ACCOUNT'
+      )
+      SELECT * FROM ranked WHERE rnk = 1
+   ) LOOP
+      put_detail(r.carrier, r.service_name, r.carrier_svc_code, r.service_type,
+                 r.total_base_charge, r.total_net_charge, r.list_price,
+                 r.currency, r.arrival_date);
+   END LOOP;
+
+   -- ================================================================
+   -- 3. FASTEST OPTION  (earliest commit date, ACCOUNT rate)
+   --    Services with no commit date sort last (date '9999-12-31').
+   --    JSON date format: YYYY-MM-DDTHH24:MI:SS (ISO 8601).
+   -- ================================================================
+   hdr('FASTEST OPTION  (earliest commit date, ACCOUNT rate)');
+
+   FOR r IN (
+      WITH raw AS (
+         SELECT
+            jt.service_type, jt.service_name, jt.rate_type,
+            jt.total_base_charge, jt.total_net_charge, jt.currency,
+            COALESCE(jt.svc_desc_code, jt.op_svc_code,
+                     MAX(jt.nested_svc_code) OVER (PARTITION BY jt.service_type)) AS carrier_svc_code,
+            COALESCE(jt.commit_date,
+                     MAX(jt.nested_commit_dt) OVER (PARTITION BY jt.service_type),
+                     MAX(jt.nested_op_commit) OVER (PARTITION BY jt.service_type)) AS arrival_date
+         FROM JSON_TABLE(
+            p_json, '$.output.rateReplyDetails[*]'
+            COLUMNS (
+               service_type  VARCHAR2(100) PATH '$.serviceType',
+               service_name  VARCHAR2(200) PATH '$.serviceName',
+               op_svc_code   VARCHAR2(20)  PATH '$.operationalDetail.serviceCode',
+               svc_desc_code VARCHAR2(20)  PATH '$.serviceDescription.code',
+               commit_date   VARCHAR2(50)  PATH '$.commit.dateDetail.dayCxsFormat',
+               NESTED PATH '$.ratedShipmentDetails[*]' COLUMNS (
+                  rate_type         VARCHAR2(50) PATH '$.rateType',
+                  total_base_charge NUMBER       PATH '$.totalBaseCharge',
+                  total_net_charge  NUMBER       PATH '$.totalNetCharge',
+                  currency          VARCHAR2(10) PATH '$.currency',
+                  nested_svc_code   VARCHAR2(20) PATH '$.serviceDescription.code',
+                  nested_commit_dt  VARCHAR2(50) PATH '$.commit.dateDetail.dayCxsFormat',
+                  nested_op_commit  VARCHAR2(50) PATH '$.operationalDetail.commitDate'
+               )
+            )
+         ) jt
+      ),
+      list_px AS (
+         SELECT service_type, total_net_charge AS list_price
+         FROM   raw WHERE rate_type = 'LIST'
+      ),
+      ranked AS (
+         SELECT 'FEDEX' AS carrier, r.service_name, r.carrier_svc_code,
+                r.service_type, r.total_base_charge, r.total_net_charge,
+                NVL(lp.list_price,0) AS list_price, r.currency, r.arrival_date,
+                RANK() OVER (
+                   ORDER BY
+                      CASE WHEN r.arrival_date IS NOT NULL
+                           THEN TO_DATE(SUBSTR(r.arrival_date,1,19),
+                                        'YYYY-MM-DD"T"HH24:MI:SS')
+                           ELSE DATE '9999-12-31'
+                      END ASC
+                ) AS rnk
+         FROM      raw r
+         LEFT JOIN list_px lp ON lp.service_type = r.service_type
+         WHERE     r.rate_type = 'ACCOUNT'
+      )
+      SELECT * FROM ranked WHERE rnk = 1
+   ) LOOP
+      put_detail(r.carrier, r.service_name, r.carrier_svc_code, r.service_type,
+                 r.total_base_charge, r.total_net_charge, r.list_price,
+                 r.currency, r.arrival_date);
+   END LOOP;
+
+EXCEPTION
+   WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+      RAISE;
+END fedex_parse_rate_response;
+/
+
+---
+
+How to call it:
+DECLARE
+   l_json CLOB;
+BEGIN
+   l_json := q'[{ ...paste RespJson.txt content here... }]';
+   fedex_parse_rate_response(l_json);
+END;
+/
+
+---
