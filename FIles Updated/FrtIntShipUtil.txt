@@ -1,0 +1,545 @@
+-----------------------------------------------------------------------------
+--
+--  Logical unit: FrtIntShipUtil
+--  Component:    FRTINT
+--
+--  IFS Developer Studio Template Version 3.0
+--
+--  Date    Sign    History
+--  ------  ------  ---------------------------------------------------------
+-----------------------------------------------------------------------------
+
+layer Cust;
+
+-------------------- PUBLIC DECLARATIONS ------------------------------------
+
+
+-------------------- PRIVATE DECLARATIONS -----------------------------------
+
+
+-------------------- LU SPECIFIC IMPLEMENTATION METHODS ---------------------
+
+
+-------------------- LU SPECIFIC PRIVATE METHODS ----------------------------
+
+
+-------------------- LU SPECIFIC PROTECTED METHODS --------------------------
+
+
+-------------------- LU SPECIFIC PUBLIC METHODS -----------------------------
+PROCEDURE Send_Shipment(
+   transaction_id_      IN  VARCHAR2,
+   shipment_id_         IN  NUMBER,
+   shipment_trans_url_  OUT VARCHAR2,
+   error_message_       OUT VARCHAR2,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+   Shipment_API.Exist(shipment_id_);
+   
+  -- IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Send_Shipment(
+                  transaction_id_,
+                  shipment_id_,
+                  shipment_trans_url_,
+                  error_message_,
+                  frt_provider_id_);
+ --  END IF;
+END Send_Shipment;
+
+FUNCTION Get_Shipment(
+   transaction_id_      IN  VARCHAR2,
+   shipment_id_         IN  NUMBER,
+   shipment_status_     OUT VARCHAR2,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL) RETURN Json_Object_T
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+ --  IF (frt_provider_id_ = 'PACEJET') THEN  
+      RETURN Frt_Int_Pacejet_Util_API.Get_Shipment(
+                  transaction_id_,
+                  shipment_id_,
+                  shipment_status_,
+                  frt_provider_id_);
+--   END IF;
+   
+END Get_Shipment;
+
+PROCEDURE Get_Shipment_Confirms_List
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE;
+BEGIN
+   frt_provider_id_ := Get_Freight_Provider;
+   
+ --  IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Get_Shipment_Confirms_List(frt_provider_id_);
+--   END IF;
+END Get_Shipment_Confirms_List;
+
+FUNCTION Get_Shipment_Confirm(
+   transaction_id_      IN  VARCHAR2,
+   shipment_id_         IN  NUMBER,
+   shipment_confirm_    OUT Json_Object_T,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL) RETURN BOOLEAN
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+ --  IF (frt_provider_id_ = 'PACEJET') THEN
+      RETURN Frt_Int_Pacejet_Util_API.Get_Shipment_Confirm(
+                  transaction_id_,
+                  shipment_id_,
+                  shipment_confirm_,
+                  frt_provider_id_);
+--   END IF;
+END Get_Shipment_Confirm;
+
+PROCEDURE Void_Shipment(
+   transaction_id_      IN  VARCHAR2,
+   shipment_id_         IN  NUMBER,
+   cancel_result_       OUT VARCHAR2,
+   error_msg_           OUT VARCHAR2,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+ --  IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Void_Shipment(
+                  transaction_id_,
+                  shipment_id_,
+                  cancel_result_,
+                  error_msg_,
+                  frt_provider_id_);
+--   END IF;                        
+END Void_Shipment;
+
+PROCEDURE Send_Shipment_Confirm(
+   transaction_id_      IN VARCHAR2,
+   shipment_id_         IN NUMBER,
+   freight_provider_id_ IN VARCHAR2 DEFAULT NULL,
+   erp_status_          IN VARCHAR2 DEFAULT 'Success',
+   status_msg_          IN VARCHAR2 DEFAULT 'Shipment Confirmed in the ERP')
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Send_Shipment_Confirm(
+                  transaction_id_,
+                  shipment_id_,
+                  frt_provider_id_,
+                  erp_status_,
+                  status_msg_);
+--   END IF;
+END Send_Shipment_Confirm;
+
+
+PROCEDURE Get_Shipment_Rates(
+   shipment_rates_      OUT Frt_Int_Message_Util_API.Sr_Shipment_Rates_Rec,
+   transaction_id_      IN  VARCHAR2,
+   shipment_id_         IN  NUMBER,
+   error_message_       OUT VARCHAR2,
+   origin_              IN  Frt_Int_Message_Util_API.Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_           IN  VARCHAR2 DEFAULT 'FALSE',
+   ship_via_code_       IN  VARCHAR2 DEFAULT NULL,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Get_Shipment_Rates(
+                  shipment_rates_,
+                  transaction_id_,
+                  shipment_id_,
+                  error_message_,
+                  origin_,
+                  auto_pack_,
+                  ship_via_code_,
+                  frt_provider_id_);
+--   END IF;                        
+END Get_Shipment_Rates;
+
+PROCEDURE Get_Cust_Order_Rates(
+   shipment_rates_      OUT Frt_Int_Message_Util_API.Sr_Shipment_Rates_Rec,
+   transaction_id_      IN  VARCHAR2,
+   order_no_            IN  VARCHAR2,
+   error_message_       OUT VARCHAR2,
+   origin_              IN  Frt_Int_Message_Util_API.Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_           IN  VARCHAR2 DEFAULT 'FALSE',
+   ship_via_code_       IN  VARCHAR2 DEFAULT NULL,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   --omar cust order rates code here
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Get_Cust_Order_Rates(
+                  shipment_rates_,
+                  transaction_id_,
+                  order_no_,
+                  error_message_,
+                  origin_,
+                  auto_pack_,
+                  ship_via_code_,
+                  frt_provider_id_);
+--   END IF;                        
+END Get_Cust_Order_Rates;
+
+PROCEDURE Get_Quotation_Rates(
+   shipment_rates_      OUT Frt_Int_Message_Util_API.Sr_Shipment_Rates_Rec,
+   transaction_id_      IN  VARCHAR2,
+   quotation_no_        IN  VARCHAR2,
+   error_message_       OUT VARCHAR2,
+   origin_              IN  Frt_Int_Message_Util_API.Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_           IN  VARCHAR2 DEFAULT 'FALSE',
+   ship_via_code_       IN  VARCHAR2 DEFAULT NULL,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Get_Quotation_Rates(
+                  shipment_rates_,
+                  transaction_id_,
+                  quotation_no_,
+                  error_message_,
+                  origin_,
+                  auto_pack_,
+                  ship_via_code_,
+                  frt_provider_id_);
+--   END IF;                        
+END Get_Quotation_Rates;
+
+PROCEDURE Get_Shipment_Order_Rates(
+   shipment_rates_      OUT Frt_Int_Message_Util_API.Sr_Shipment_Rates_Rec,
+   transaction_id_      IN  VARCHAR2,
+   ship_order_id_       IN  NUMBER,
+   error_message_       OUT VARCHAR2,
+   origin_              IN  Frt_Int_Message_Util_API.Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_           IN  VARCHAR2 DEFAULT 'FALSE',
+   ship_via_code_       IN  VARCHAR2 DEFAULT NULL,
+   freight_provider_id_ IN  VARCHAR2 DEFAULT NULL)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Get_Shipment_Order_Rates(
+                  shipment_rates_,
+                  transaction_id_,
+                  ship_order_id_,
+                  error_message_,
+                  origin_,
+                  auto_pack_,
+                  ship_via_code_,
+                  frt_provider_id_);
+--   END IF;                        
+END Get_Shipment_Order_Rates;
+
+FUNCTION Get_Carrier_Services(
+   freight_provider_id_ IN VARCHAR2) RETURN Frt_Int_Message_Util_API.Pj_Carrier_Service_Arr
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      RETURN Frt_Int_Pacejet_Util_API.Get_Carrier_Services(frt_provider_id_);
+--   END IF;
+END Get_Carrier_Services;
+
+FUNCTION Get_Freight_Facilities(
+   freight_provider_id_ IN VARCHAR2) RETURN CLOB
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF; 
+   
+ --  IF (frt_provider_id_ = 'PACEJET') THEN
+      RETURN Frt_Int_Pacejet_Util_API.Get_Freight_Facilities(frt_provider_id_);
+--   ELSE
+--      Error_SYS.Appl_General(lu_name_, 'FRTINTERR02: ' || 'Invalid/Unsupported Freight Provider :P1', frt_provider_id_);
+--   END IF;
+   RETURN NULL;
+END Get_Freight_Facilities;
+
+FUNCTION Update_Shipment(
+   freight_provider_ IN  VARCHAR2,
+   transaction_id_   IN  VARCHAR2,
+   source_ref_type_  IN  VARCHAR2,
+   source_ref_       IN  VARCHAR2, 
+   freight_msg_type_ IN  VARCHAR2,
+   shipment_confirm_ IN  Json_Object_T,
+   erp_status_       OUT VARCHAR2,
+   err_msg_          OUT VARCHAR2) RETURN BOOLEAN
+IS
+   shipment_confirm_rec_  Frt_Int_Message_Util_API.Sc_Shipment_Confirm_Rec;
+BEGIN
+   -- update shipment in IFS
+   shipment_confirm_rec_ := Frt_Int_Message_Util_API.Json_To_Shipment_Confirm_Rec(shipment_confirm_);
+
+   Frt_Transaction_Util_API.Update_Transaction(
+               source_ref_type_, 
+               source_ref_, 
+               freight_msg_type_,
+               shipment_confirm_rec_,
+               erp_status_,
+               err_msg_);
+   RETURN TRUE;
+EXCEPTION
+   WHEN OTHERS THEN 
+      Frt_Int_Ship_Util_API.Log_Shipment_Trace(
+                  freight_provider_,
+                  transaction_id_,
+                  'ERP_UPDATE_SHIPMENT',
+                  Frt_Source_Ref_Type_API.DB_SHIPMENT,
+                  source_ref_,
+                  Frt_Message_Type_API.DB_SHIPMENT,
+                  NULL,
+                  shipment_confirm_,
+                  'Warning',
+                  substr(sqlerrm,1, 2000));
+      RETURN FALSE;     
+END Update_Shipment;
+
+PROCEDURE Set_Shipment_Freight_Status(
+   freight_provider_ IN VARCHAR2,   
+   source_ref_type_  IN VARCHAR2,
+   source_ref_       IN VARCHAR2,
+   freight_msg_type_ IN VARCHAR2,
+   status_           IN VARCHAR2,
+   error_message_    IN VARCHAR2 DEFAULT NULL)
+IS 
+BEGIN
+   -- update shipment freight status in IFS  
+   IF (status_ = 'Completed') THEN
+      Frt_Transaction_API.Set_Completed(source_ref_type_, source_ref_, freight_msg_type_);
+   ELSIF (status_ = 'Confirmed') THEN
+      Frt_Transaction_API.Set_Confirmed(source_ref_type_, source_ref_, freight_msg_type_);
+   ELSIF (status_ = 'Pending') THEN
+      Frt_Transaction_API.Set_Pending(source_ref_type_, source_ref_, freight_msg_type_);
+   ELSIF (status_ = 'Void') THEN
+      Frt_Transaction_API.Set_Void(source_ref_type_, source_ref_, freight_msg_type_);
+   END IF;  
+END Set_Shipment_Freight_Status;
+
+PROCEDURE Process_Shipment(
+   transaction_id_      IN VARCHAR2,
+   shipment_id_         IN NUMBER,
+   freight_provider_id_ IN VARCHAR2)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+  
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Process_Shipment(
+                     transaction_id_,
+                     shipment_id_,
+                     frt_provider_id_);
+--   END IF;
+END Process_Shipment;
+
+PROCEDURE Reconfirm_Shipment(
+   transaction_id_      IN VARCHAR2,
+   shipment_id_         IN NUMBER,
+   freight_provider_id_ IN VARCHAR2)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+  
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Reconfirm_Shipment(
+                     transaction_id_,
+                     shipment_id_,
+                     frt_provider_id_);
+--   END IF;
+END Reconfirm_Shipment;
+
+PROCEDURE Reprocess_Transaction(
+   transaction_id_      IN VARCHAR2,
+   source_ref_          IN VARCHAR2,
+   source_ref_type_     IN VARCHAR2,
+   freight_msg_type_    IN VARCHAR2,
+   interface_           IN VARCHAR2,
+   freight_provider_id_ IN VARCHAR2)
+IS
+   frt_provider_id_   frt_provider_config_value_tab.freight_provider_id%TYPE := freight_provider_id_;
+BEGIN  
+   IF (frt_provider_id_ IS NULL) THEN 
+      frt_provider_id_ := Get_Freight_Provider;
+   END IF;
+   
+--   IF (frt_provider_id_ = 'PACEJET') THEN
+      Frt_Int_Pacejet_Util_API.Reprocess_Transaction(
+                  transaction_id_,
+                  source_ref_,
+                  source_ref_type_,
+                  freight_msg_type_,
+                  interface_,
+                  frt_provider_id_);
+--   END IF;
+END Reprocess_Transaction;
+
+PROCEDURE Process_Response_Error(
+   frt_provider_error_  OUT VARCHAR2,
+   freight_provider_id_ IN  VARCHAR2,
+   transaction_id_      IN  VARCHAR2,
+   interface_           IN  VARCHAR2,
+   source_ref_type_     IN  VARCHAR2,
+   source_ref_          IN  VARCHAR2,
+   freight_msg_type_    IN  VARCHAR2,
+   request_             IN  Json_Object_T,
+   response_            IN  Json_Object_T)
+IS  
+   result_          VARCHAR2(500);
+   err_code_        VARCHAR2(100);
+   info_            VARCHAR2(1000);
+   remote_err_msg_  VARCHAR2(2000);  
+   message_         VARCHAR2(2000);
+   new_line_        VARCHAR2(2);
+BEGIN
+   IF DBMS_UTILITY.PORT_STRING LIKE 'IBMPC%' THEN new_line_ := chr(13)||chr(10); ELSE new_line_ := chr(10); END IF;
+   
+   IF (response_ IS NOT NULL) THEN 
+      err_code_ := response_.get_string('code');
+      result_ := response_.get_string('severity');      
+      info_ := response_.get_string('moreInfo');
+      remote_err_msg_ := substr(response_.get_string('message'), 1, 1800);
+      IF(result_ IS NOT NULL) THEN 
+         message_ := result_ || ' (' || err_code_ ||'): ' || remote_err_msg_;
+         IF (info_ IS NOT NULL) THEN 
+            message_ := message_ || new_line_ || info_;
+         END IF;
+      END IF;
+   END IF;   
+   frt_provider_error_ := message_;
+   
+   -- dbms_output.Put_Line(message_);
+   Frt_Int_Ship_Util_API.Log_Shipment_Trace(
+               freight_provider_id_,
+               transaction_id_,
+               interface_,
+               source_ref_type_,
+               source_ref_,
+               freight_msg_type_,
+               request_,
+               response_,
+               'Error',
+               message_);
+   
+END Process_Response_Error;
+
+PROCEDURE Log_Shipment_Trace(
+   freight_provider_id_ IN VARCHAR2,
+   transaction_id_      IN VARCHAR2,
+   interface_           IN VARCHAR2,
+   source_ref_type_     IN VARCHAR2,
+   source_ref_          IN VARCHAR2,
+   freight_msg_type_    IN VARCHAR2,
+   request_             IN Json_Element_T,
+   response_            IN Json_Element_T,
+   status_              IN VARCHAR2,
+   error_message_       IN VARCHAR2 DEFAULT NULL)
+IS   
+   request_json_     CLOB := NULL;
+   response_json_    CLOB := NULL;
+   ifs_log_trace_    VARCHAR2(20) := Nvl(Frt_Provider_Config_Value_API.Get_Config_Value(freight_provider_id_, 'IFS_LOGTRACE'), 'TRUE');
+   PRAGMA autonomous_transaction; 
+BEGIN
+   -- log interface transaction in log table
+   IF (request_ IS NOT NULL) THEN
+      request_json_ := request_.to_clob();
+   END IF;
+   IF (response_ IS NOT NULL) THEN
+      response_json_ := response_.to_clob();
+   END IF;
+   
+   IF (ifs_log_trace_ = 'TRUE') THEN 
+      Frt_Int_Log_Trace_API.New_Update(
+                  freight_provider_id_,
+                  transaction_id_,
+                  interface_,
+                  source_ref_type_,
+                  source_ref_,
+                  freight_msg_type_,
+                  request_json_,
+                  response_json_,
+                  status_,
+                  error_message_);                                 
+   END IF;
+   
+   IF (status_ = 'Error' AND Frt_Transaction_API.Exists(source_ref_type_, source_ref_, freight_msg_type_)) THEN  
+      Frt_Transaction_API.Set_Error_Message(
+                  source_ref_type_, 
+                  source_ref_, 
+                  freight_msg_type_, 
+                  error_message_);
+   END IF;
+   @ApproveTransactionStatement(2021-11-18,KaNaUS)
+   COMMIT;
+EXCEPTION
+   WHEN OTHERS THEN
+      -- dbms_output.Put_Line(sqlerrm);
+      @ApproveTransactionStatement(2021-11-18,KaNaUS)
+      ROLLBACK;
+END Log_Shipment_Trace;
+
+FUNCTION Get_Freight_Provider RETURN VARCHAR2
+IS
+   freight_provider_  frt_provider_config_value_tab.freight_provider_id%TYPE;
+   
+   CURSOR get_provider IS
+         SELECT freight_provider_id
+         FROM frt_provider_config_tab
+         WHERE active = 'TRUE' AND default_provider = 'YES';
+BEGIN
+   OPEN get_provider;
+   FETCH get_provider INTO freight_provider_;
+   CLOSE get_provider;
+   
+   RETURN freight_provider_;   
+END Get_Freight_Provider;
+-------------------- LU CUST NEW METHODS -------------------------------------

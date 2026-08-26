@@ -1,0 +1,2953 @@
+-----------------------------------------------------------------------------
+--
+--  Logical unit: FrtIntMessageUtil
+--  Component:    FRTINT
+--
+--  IFS Developer Studio Template Version 3.0
+--
+--  Date    Sign    History
+--  ------  ------  -------------------------------------------------------------------------------------------------------------
+--  250721  jomuus  FI Shipping Services (CS0206131 merge)
+--  240327  DIKUUS  Modified Get_Package_Detatils_Arr() to get map tags
+--  240105  DIKUUS  Modified Get_Shipment_Rec() to assign zip code, country code irrespective of account type -Customer frt account or Thirdparty
+--  211015  KANAUS  Created
+---------------------------------------------------------------------------------------------------------------------------------
+
+layer Cust;
+
+-------------------- PUBLIC DECLARATIONS ------------------------------------
+
+TYPE Sp_Dimensions_Rec IS RECORD (
+   length                         VARCHAR2(100),
+   width                          VARCHAR2(100),
+   height                         VARCHAR2(100),
+   units                          VARCHAR2(30));
+
+TYPE Sp_Price_Rec IS RECORD (
+   currency                       VARCHAR2(3),
+   amount                         VARCHAR2(100));
+
+TYPE Sp_Cost_Rec IS RECORD (
+   currency                       VARCHAR2(3),
+   amount                         VARCHAR2(100));
+
+TYPE Sp_Quantity_Rec IS RECORD (
+   units                          VARCHAR2(30),
+   value                          VARCHAR2(100));
+
+TYPE Sp_Name_Value_Rec IS RECORD (
+   name         VARCHAR2(200),
+   value        VARCHAR2(2000));
+
+TYPE Sp_Custom_Fields_Arr IS TABLE OF Sp_Name_Value_Rec;
+
+TYPE Sp_Map_Tags_Arr IS TABLE OF Sp_Name_Value_Rec;
+
+TYPE Sp_Product_Details_Rec IS RECORD (
+   number                         VARCHAR2(100),
+   description                    VARCHAR2(200),
+   commodity_name                 VARCHAR2(100),
+   auto_pack                      VARCHAR2(100),
+   pack_ui_rmng_item              VARCHAR2(100),
+   weight                         VARCHAR2(100),
+   product_detail_map_tags       Sp_Map_Tags_Arr,
+   dimensions                     Sp_Dimensions_Rec,
+   quantity                       Sp_Quantity_Rec,
+   cost                           Sp_Cost_Rec,
+   price                          Sp_Price_Rec,
+   custom_fields                  Sp_Custom_Fields_Arr);
+
+TYPE Sp_Product_Details_Arr IS TABLE OF Sp_Product_Details_Rec;
+
+TYPE Sp_Package_Details_Rec IS RECORD (
+   weight                         VARCHAR2(100),
+   package_number                 VARCHAR2(100),
+   dimensions                     Sp_Dimensions_Rec,
+   product_details_list           Sp_Product_Details_Arr,
+   custom_fields                  Sp_Custom_Fields_Arr,
+   user_field1                    VARCHAR2(2000),
+   user_field2                    VARCHAR2(2000),
+   user_field3                    VARCHAR2(2000),
+   user_field4                    VARCHAR2(2000),
+   user_field5                    VARCHAR2(2000),
+   user_field6                    VARCHAR2(2000),
+   user_field7                    VARCHAR2(2000));
+
+TYPE Sp_Package_Details_Arr IS TABLE OF Sp_Package_Details_Rec;
+
+TYPE Sp_Shipment_Message_Arr IS TABLE OF Sp_Name_Value_Rec;
+
+TYPE Sp_Shipment_Option_Arr IS TABLE OF Sp_Name_Value_Rec;
+
+-- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+TYPE Sp_Shipment_Service_Codes_Rec IS RECORD (
+   code                           VARCHAR2(2000));
+   
+TYPE Sp_Shipment_Service_Codes_Arr IS TABLE OF Sp_Shipment_Service_Codes_Rec;
+-- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+
+
+TYPE Sp_Shipment_Detail_Rec IS RECORD (
+   user_field1                    VARCHAR2(2000),
+   user_field2                    VARCHAR2(2000),
+   user_field3                    VARCHAR2(2000),
+   user_field4                    VARCHAR2(2000),
+   user_field5                    VARCHAR2(2000),
+   user_field6                    VARCHAR2(2000),
+   user_field7                    VARCHAR2(2000),
+   user_field8                    VARCHAR2(2000),
+   weight_uom                     VARCHAR2(20),
+   shipment_detail_map_tags       Sp_Map_Tags_Arr,
+   shipment_options               Sp_Shipment_Option_Arr,
+   ltl_Options                    Sp_Shipment_Option_Arr);
+
+TYPE Sp_Billing_Details_Rec IS RECORD (
+   freight_terms_code             VARCHAR2(50),
+   name                           VARCHAR2(200),
+   zip_postal_code                VARCHAR2(20),
+   country_code                   VARCHAR2(2),
+   freight_charge_account_number  VARCHAR2(50));
+
+TYPE Sp_Carrier_Details_Rec IS RECORD (
+   ship_x_ref              VARCHAR2(50));
+
+TYPE Sp_Destination_Rec IS RECORD (
+   company_name               VARCHAR2(100),
+   address1                   VARCHAR2(35),
+   address2                   VARCHAR2(35),
+   address3                   VARCHAR2(100),
+   postal_code                VARCHAR2(35),
+   city                       VARCHAR2(35),
+   state_or_province_code     VARCHAR2(35),
+   country_code               VARCHAR2(2),
+   contact_name               VARCHAR2(200),
+   email                      VARCHAR2(100),
+   phone                      VARCHAR2(50),
+   destination_map_tags       Sp_Map_Tags_Arr);
+
+TYPE Sp_Origin_Rec IS RECORD (
+   location_type              VARCHAR2(200),
+   location_site              VARCHAR2(200),
+   location_code              VARCHAR2(200),
+   company_name               VARCHAR2(100),
+   address1                   VARCHAR2(35),
+   address2                   VARCHAR2(35),
+   address3                   VARCHAR2(100),
+   postal_code                VARCHAR2(35),
+   city                       VARCHAR2(35),
+   state_or_province_code     VARCHAR2(35),
+   country_code               VARCHAR2(2),
+   contact_name               VARCHAR2(200),
+   email                      VARCHAR2(100),
+   phone                      VARCHAR2(50));
+
+TYPE Sp_Shipment_Rec IS RECORD (
+   location                       VARCHAR2(200),
+   external_transaction_id        VARCHAR2(200),
+   transaction_id                 VARCHAR2(200),
+   shipment_map_tags              Sp_Map_Tags_Arr,
+   origin                         Sp_Origin_Rec,
+   destination                    Sp_Destination_Rec,
+   carrier_details                Sp_Carrier_Details_Rec,
+   billing_details                Sp_Billing_Details_Rec,
+   shipment_detail                Sp_Shipment_Detail_Rec,
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   shipment_service_codes         Sp_Shipment_Service_Codes_Arr,
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   message_list                   Sp_Shipment_Message_Arr,
+   package_details_list           Sp_Package_Details_Arr,
+   custom_fields                  Sp_Custom_Fields_Arr);
+
+TYPE Sr_Shipment_Rate_Rec IS RECORD (
+   carrier_number                            VARCHAR2(200),
+   carrier_service_code                      VARCHAR2(200),
+   carrier_service_code_description          VARCHAR2(200),
+   ship_mode                                 VARCHAR2(200),
+   rate_system                               VARCHAR2(200),
+   status_message                            VARCHAR2(200),
+   consignor_freight                         NUMBER, 
+   consignee_freight                         NUMBER, 
+   list_freight                              NUMBER,
+   total_service_fees                        NUMBER, 
+   fuel_surcharge                            NUMBER, 
+   currency_code                             VARCHAR2(200),
+   arrival_date_text                         VARCHAR2(200), 
+   transit_time                              NUMBER,
+   ship_code_x_ref                           VARCHAR2(200), 
+   exclude                                   BOOLEAN, 
+   scac                                      VARCHAR2(200));
+
+TYPE Sr_Shipment_Rate_Arr IS TABLE OF Sr_Shipment_Rate_Rec;
+
+TYPE Sr_Service_Recommendation_Rec IS RECORD (
+   lowest_cost_carrier_number                            VARCHAR2(200),
+   lowest_cost_carrier_service_code             VARCHAR2(200),
+   lowest_cost_carrier_service_code_description VARCHAR2(200),
+   lowest_cost_carrier_scac                              VARCHAR2(200),
+   lowest_cost_ship_code_x_ref                           VARCHAR2(200),
+   lowest_cost_consignor_freight                         NUMBER,
+   lowest_cost_consignee_freight                         NUMBER,
+   lowest_cost_list_freight                              NUMBER,
+   lowest_cost_total_service_fees                        NUMBER,
+   lowest_cost_fuel_surcharge                            NUMBER,
+   lowest_cost_currency_code                             VARCHAR2(200),
+   lowest_cost_arrival_date_text                         VARCHAR2(200),
+   lowest_cost_transit_time                              NUMBER,
+   fastest_carrier_number                                VARCHAR2(200),
+   fastest_carrier_service_code                 VARCHAR2(200),
+   fastest_carrier_service_code_description     VARCHAR2(200),
+   fastest_carrier_scac                                  VARCHAR2(200),
+   fastest_ship_code_x_ref                               VARCHAR2(200),
+   fastest_consignor_freight                             NUMBER,
+   fastest_consignee_freight                             NUMBER,
+   fastest_list_freight                                  NUMBER,
+   fastest_total_service_fees                            NUMBER,
+   fastest_fuel_surcharge                                NUMBER,
+   fastest_currency_code                                 VARCHAR2(200),
+   fastest_arrival_date_text                             VARCHAR2(200),
+   fastest_transit_time                                  NUMBER);
+
+TYPE Sr_Shipment_Rates_Rec IS RECORD(
+   service_recommendation  Sr_Service_Recommendation_Rec,
+   rating_list             Sr_Shipment_Rate_Arr);
+
+TYPE Sc_Notifications_Rec IS RECORD (
+   highest_severity	VARCHAR2(200),
+   highest_severity_notification	VARCHAR2(200),
+   notification_list	VARCHAR2(200)
+   );
+
+TYPE Sc_Origin_Rec IS RECORD (
+   address1	VARCHAR2(200),
+   address2	VARCHAR2(200),
+   address3	VARCHAR2(200),
+   address4	VARCHAR2(200),
+   address5	VARCHAR2(200),
+   city	VARCHAR2(200),
+   state_or_province_code	VARCHAR2(200),
+   postal_code	VARCHAR2(200),
+   urbanization_code	VARCHAR2(200),
+   country_code	VARCHAR2(200),
+   residential	BOOLEAN,
+   location_type	VARCHAR2(200),
+   location_site	VARCHAR2(200),
+   location_code	VARCHAR2(200),
+   company_name	VARCHAR2(200),
+   contact_name	VARCHAR2(200),
+   email	VARCHAR2(200),
+   email_notification_flags	NUMBER,
+   phone	VARCHAR2(200),
+   tax_id_number	VARCHAR2(200),
+   tax_id_type	VARCHAR2(200)
+   );
+
+TYPE Sc_Destination_Rec IS RECORD (
+   address1	VARCHAR2(200),
+   address2	VARCHAR2(200),
+   address3	VARCHAR2(200),
+   address4	VARCHAR2(200),
+   address5	VARCHAR2(200),
+   city	VARCHAR2(200),
+   state_or_province_code	VARCHAR2(200),
+   postal_code	VARCHAR2(200),
+   urbanization_code	VARCHAR2(200),
+   country_code	VARCHAR2(200),
+   residential	BOOLEAN,
+   location_type	VARCHAR2(200),
+   location_site	VARCHAR2(200),
+   location_code	VARCHAR2(200),
+   company_name	VARCHAR2(200),
+   contact_name	VARCHAR2(200),
+   email	VARCHAR2(200),
+   email_notification_flags	NUMBER,
+   phone	VARCHAR2(200),
+   tax_id_number	VARCHAR2(200),
+   tax_id_type	VARCHAR2(200)
+   );
+
+TYPE Sc_Billing_Details_Rec IS RECORD (
+   freight_terms_code	VARCHAR2(200),
+   freight_account_id	VARCHAR2(200),
+   freight_account	VARCHAR2(200),
+   freight_account_zip	VARCHAR2(200),
+   freight_account_country_code	VARCHAR2(200)
+   );
+
+TYPE Sc_Shipment_Options_Rec IS RECORD (
+   delivery_instructions_text	VARCHAR2(200),
+   cod	VARCHAR2(200),
+   signature_type	VARCHAR2(200),
+   dangerous_goods_type	VARCHAR2(200),
+   verbal_confirmation	VARCHAR2(200),
+   home_delivery_premium	VARCHAR2(200),
+   priority_alert	VARCHAR2(200),
+   variable_handling_charge	VARCHAR2(200),
+   additional_notification	VARCHAR2(200)
+   );
+
+TYPE Sc_Weight_Rec IS RECORD (
+   units	NUMBER,
+   value	NUMBER
+   );
+
+TYPE Sc_Quantity_Rec IS RECORD (
+   units	VARCHAR2(200),
+   value	VARCHAR2(200)
+   );
+
+TYPE Sc_Unit_Price_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Export_License_Rec IS RECORD (
+   number	VARCHAR2(200),
+   type	VARCHAR2(200),
+   expiry_date	VARCHAR2(200)
+   );
+
+TYPE Sc_Commodity_Rec IS RECORD (
+   name	VARCHAR2(200),
+   commodity_code	VARCHAR2(200),
+   description	VARCHAR2(200),
+   country_of_manufacture	VARCHAR2(200),
+   harmonized_code	VARCHAR2(200),
+   weight	Sc_Weight_Rec,
+   quantity	Sc_Quantity_Rec,
+   unit_price	Sc_Unit_Price_Rec,
+   export_license	Sc_Export_License_Rec,
+   classification	VARCHAR2(200),
+   nafta	VARCHAR2(200)
+   );
+
+TYPE Sc_Commodity_Arr IS TABLE OF Sc_Commodity_Rec;
+
+TYPE Sc_International_Rec IS RECORD (
+   customs_value	VARCHAR2(200),
+   duties_payment_type	VARCHAR2(200),
+   duties_account_number	VARCHAR2(200),
+   duties_country_code	VARCHAR2(200),
+   b13_a_filing_option	VARCHAR2(200),
+   b13_a_statement_data	VARCHAR2(200),
+   b13_a_permit_number	VARCHAR2(200),
+   recipient_customs_id_type	VARCHAR2(200),
+   commercial_invoice	VARCHAR2(200),
+   commodity_list	Sc_Commodity_Arr,
+   broker	VARCHAR2(200),
+   importer_of_record	VARCHAR2(200)
+   );
+
+TYPE Sc_Shipment_Detail_Rec IS RECORD (
+   shipment_options	Sc_Shipment_Options_Rec,
+   international	Sc_International_Rec
+   );
+
+TYPE Sc_Routing_Detail_Rec IS RECORD (
+   ship_timestamp	VARCHAR2(200),
+   arrival_estimate	VARCHAR2(200),
+   transit_time	NUMBER,
+   arrival_estimate_string	VARCHAR2(200)
+   );
+
+TYPE Sc_Total_Weight_Rec IS RECORD (
+   units	VARCHAR2(20),
+   value	NUMBER
+   );
+
+TYPE Sc_Freight_Total_Cost_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Freight_Total_Price_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Freight_Price_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Freight_Total_Surchages_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Rate_Detail_Rec IS RECORD (
+   total_weight	Sc_Total_Weight_Rec,
+   freight_total_cost	Sc_Freight_Total_Cost_Rec,
+   freight_total_price	Sc_Freight_Total_Price_Rec,
+   freight_list_price	Sc_Freight_Price_Rec,
+   freight_total_surchages	Sc_Freight_Total_Surchages_Rec,
+   quote_id	VARCHAR2(200)
+   );
+
+TYPE Sc_Dimensions_Rec IS RECORD (
+   length	VARCHAR2(200),
+   width	   VARCHAR2(200),
+   height	VARCHAR2(200),
+   units	   VARCHAR2(30)
+   );
+
+TYPE Sc_User_Field_Rec IS RECORD (
+   user_field1	VARCHAR2(200),
+   user_field2	VARCHAR2(200),
+   user_field3	VARCHAR2(200),
+   user_field4	VARCHAR2(200),
+   user_field5	VARCHAR2(200),
+   user_field6	VARCHAR2(200),
+   user_field7	VARCHAR2(200),
+   user_field8	VARCHAR2(200),
+   user_field9	VARCHAR2(200),
+   user_field10	VARCHAR2(200),
+   user_field11	VARCHAR2(200),
+   user_field12	VARCHAR2(200),
+   user_field13	VARCHAR2(200),
+   user_field14	VARCHAR2(200),
+   user_field15	VARCHAR2(200)
+   );
+
+TYPE Sc_Classification_Rec IS RECORD (
+   rate_base_tariff_code	VARCHAR2(200),
+   product_code	VARCHAR2(200),
+   product_sub_code	VARCHAR2(200)
+   );
+
+TYPE Sc_Unit_Cost_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Unit_Weight_Rec IS RECORD (
+   units	NUMBER,
+   value	NUMBER
+   );
+
+TYPE Sc_Product_Details_Rec IS RECORD (
+   upc_code	VARCHAR2(200),
+   country_of_origin	VARCHAR2(200),
+   producer_number	VARCHAR2(200),
+   harmonize_code	VARCHAR2(200),
+   eccn_code	VARCHAR2(200),
+   hazardous_code	VARCHAR2(200),
+   commodity_code	VARCHAR2(200),
+   commodity_name	VARCHAR2(200),
+   export_license	Sc_Export_License_Rec,
+   classification	Sc_Classification_Rec,
+   unit_cost	Sc_Unit_Cost_Rec,
+   unit_weight	Sc_Unit_Weight_Rec,
+   quantity_uom	VARCHAR2(200),
+   user_field_list	Sc_User_Field_Rec,
+   external_id	VARCHAR2(200),
+   quantity	NUMBER,
+   product_description	VARCHAR2(200),
+   product_number	VARCHAR2(200),
+   unit_price	Sc_Unit_Price_Rec,
+   nafta	VARCHAR2(200),
+   pick_order_control_number	VARCHAR2(200),
+   pick_order_line_number	VARCHAR2(200)
+   );
+
+TYPE Sc_Product_Details_Arr IS TABLE OF Sc_Product_Details_Rec;
+
+TYPE Sc_Base_Charge_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Declared_Value_Rec IS RECORD (
+   currency	VARCHAR2(200),
+   amount	NUMBER
+   );
+
+TYPE Sc_Package_Options_Rec IS RECORD (
+   declared_value	Sc_Declared_Value_Rec,
+   insured_value	VARCHAR2(200),
+   classification	Sc_Classification_Rec,
+   rate_class	VARCHAR2(200),
+   cod_total	NUMBER,
+   dangerous_goods_type	VARCHAR2(200),
+   signature_type	VARCHAR2(200)
+   );
+
+TYPE Sc_Package_Details_Rec IS RECORD (
+   handling_unit_id     NUMBER,
+   packing_list_number	VARCHAR2(200),
+   external_id	VARCHAR2(200),
+   tracking_url	VARCHAR2(200),
+   tracking_number	VARCHAR2(200),
+   sequence_number	VARCHAR2(200),
+   parent_sequence	VARCHAR2(200),
+   rate_detail	Sc_Rate_Detail_Rec,
+   packaging_type	VARCHAR2(200),
+   weight	Sc_Weight_Rec,
+   dimensions	Sc_Dimensions_Rec,
+   user_field_list	Sc_User_Field_Rec,
+   product_details_list	Sc_Product_Details_Arr,
+   base_charge	Sc_Base_Charge_Rec,
+   package_number	VARCHAR2(200),
+   package_options	Sc_Package_Options_Rec,
+   sscc	VARCHAR2(200),
+   packaging_size	VARCHAR2(200),
+   packaging_rate_class	VARCHAR2(200),
+   packaging_weight	VARCHAR2(200),
+   master_pack_scan_code	VARCHAR2(200)
+   );
+
+TYPE Sc_Package_Details_Arr IS TABLE OF Sc_Package_Details_Rec;
+
+TYPE Sc_Message_Rec IS RECORD (
+   name	VARCHAR2(200),
+   -- 20221130 jomuus (+/-) Message list field length too short START
+   -- value   VARCHAR2(200)
+   value   VARCHAR2(2000)
+   -- 20221130 jomuus (+/-) Message list field length too short FINISH
+   );
+
+
+TYPE Sc_Message_Arr IS TABLE OF Sc_Message_Rec;
+
+TYPE Sc_Shipment_Confirm_Rec IS RECORD (
+   notifications	Sc_Notifications_Rec,
+   transaction_id	VARCHAR2(200),
+   external_transaction_id	VARCHAR2(200),
+   location	VARCHAR2(200),
+   method	VARCHAR2(200),
+   sub_method	VARCHAR2(200),
+   action	VARCHAR2(200),
+   workstation_name	VARCHAR2(200),
+   master_tracking_number	VARCHAR2(200),
+   pro_bill	VARCHAR2(200),
+   itn_number	VARCHAR2(200),
+   label_type	VARCHAR2(200),
+   carrier_service	VARCHAR2(200),
+   carrier	VARCHAR2(200),
+   ship_via	VARCHAR2(200),
+   scac	VARCHAR2(200),
+   freight_terms	VARCHAR2(200),
+   printer_name	VARCHAR2(200),
+   label_custom_positioning	VARCHAR2(200),
+   packed_by	VARCHAR2(200),
+   shipped_by	VARCHAR2(200),
+   origin	Sc_Origin_Rec,
+   destination	Sc_Destination_Rec,
+   billing_details	Sc_Billing_Details_Rec,
+   shipment_detail	Sc_Shipment_Detail_Rec,
+   routing_detail	Sc_Routing_Detail_Rec,
+   rate_detail	Sc_Rate_Detail_Rec,
+   package_details_list	Sc_Package_Details_Arr,
+   user_field_list	Sc_User_Field_Rec,
+   message_list	Sc_Message_Arr,
+   consolidated_control_number	VARCHAR2(200),
+   ship_mode	VARCHAR2(200)
+   );
+
+TYPE Pj_Carrier_Service_Rec IS RECORD (
+   carrier_service_name	VARCHAR2(200),
+   carrier_service_code	VARCHAR2(200),
+   carrier_service_description	VARCHAR2(200),
+   carrier_service_ship_code_x_ref	VARCHAR2(200),
+   carrier_service_subsidiary	VARCHAR2(200),
+   carrier_service_scac	VARCHAR2(200),
+   carrier_service_exclude	VARCHAR2(200),
+   carrier_service_mode	VARCHAR2(200)
+   );
+
+TYPE Pj_Carrier_Service_Arr IS TABLE OF Pj_Carrier_Service_Rec;
+
+TYPE Pj_Freight_Facility_Rec IS RECORD (
+   facility_number	VARCHAR2(200),
+   facility_name	VARCHAR2(200),
+   facility_active_on_monday	NUMBER,
+   facility_active_on_tuesday	NUMBER,
+   facility_active_on_wednesday	NUMBER,
+   facility_active_on_thursday	NUMBER,
+   facility_active_on_friday	NUMBER,
+   facility_active_on_saturday	NUMBER,
+   facility_active_on_sunday	NUMBER,
+   facility_holiday_calendar_rule	VARCHAR2(200),
+   facility_site_code	VARCHAR2(200),
+   facility_aesid_number	VARCHAR2(200),
+   facility_aesid_type	VARCHAR2(200),
+   facility_tax_identifier	VARCHAR2(200),
+   facility_tax_identifier_type	VARCHAR2(200),
+   facility_create_date_time	VARCHAR2(200),
+   facility_create_user	VARCHAR2(200),
+   facility_modify_date_time	VARCHAR2(200),
+   facility_modify_user	VARCHAR2(200)
+   );
+
+TYPE Pj_Freight_Facility_Arr IS TABLE OF Pj_Freight_Facility_Rec;
+
+-------------------- PRIVATE DECLARATIONS -----------------------------------
+
+
+-------------------- LU SPECIFIC IMPLEMENTATION METHODS ---------------------
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Origin_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.location_type IS NULL OR
+       NOT rec_.location_site IS NULL OR
+       NOT rec_.location_code IS NULL OR
+       NOT rec_.company_name IS NULL OR
+       NOT rec_.address1 IS NULL OR
+       NOT rec_.city IS NULL OR
+       NOT rec_.country_code IS NULL OR
+       NOT rec_.postal_code IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Destination_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.company_name IS NULL OR
+       NOT rec_.address1 IS NULL OR
+       NOT rec_.address2 IS NULL OR
+       NOT rec_.address3 IS NULL OR
+       NOT rec_.city IS NULL OR
+       NOT rec_.state_or_province_code IS NULL OR
+       NOT rec_.postal_code IS NULL OR
+       NOT rec_.country_code IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Carrier_Details_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.ship_x_ref IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Billing_Details_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.freight_terms_code IS NULL OR 
+       NOT rec_.zip_postal_code IS NULL OR
+       NOT rec_.country_code IS NULL OR
+       NOT rec_.freight_charge_account_number IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Shipment_Detail_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.user_field1 IS NULL OR
+       NOT rec_.user_field2 IS NULL OR
+       NOT rec_.user_field3 IS NULL OR
+       NOT rec_.user_field4 IS NULL OR
+       NOT rec_.user_field5 IS NULL OR
+       NOT rec_.user_field6 IS NULL OR
+       NOT rec_.user_field7 IS NULL OR
+       NOT rec_.weight_uom IS NULL OR
+       NOT Check_Is_Null___(rec_.shipment_options) OR
+       NOT Check_Is_Null___(rec_.ltl_Options)) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Shipment_Option_Arr) RETURN BOOLEAN
+IS
+   is_null_   BOOLEAN := TRUE;
+BEGIN
+   IF (rec_.count = 0) THEN
+      RETURN TRUE;
+   END IF;
+   FOR i IN rec_.FIRST..rec_.LAST LOOP
+      IF (rec_(i).value IS NOT NULL) THEN
+         RETURN FALSE;
+      END IF;
+   END LOOP;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Dimensions_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.length IS NULL AND
+       NOT rec_.width IS NULL AND
+       NOT rec_.height IS NULL AND
+       NOT rec_.units IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Quantity_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.units IS NULL OR
+       NOT rec_.value IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Cost_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.currency IS NULL OR
+       NOT rec_.amount IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+FUNCTION Check_Is_Null___ (
+   rec_ IN Sp_Price_Rec) RETURN BOOLEAN
+IS
+BEGIN
+   IF (NOT rec_.currency IS NULL OR
+       NOT rec_.amount IS NULL) THEN
+      RETURN FALSE;
+   END IF;
+   RETURN TRUE;   
+END Check_Is_Null___;
+
+PROCEDURE Json_Put___(
+   json_    IN OUT NOCOPY Json_Object_T,
+   name_    IN            VARCHAR2,
+   value_   IN            VARCHAR2,
+   null_ok_ IN            BOOLEAN DEFAULT FALSE)
+IS   
+BEGIN
+   IF (value_ IS NOT NULL OR (value_ IS NULL AND null_ok_)) THEN 
+      json_.put(name_, value_);
+   END IF;
+END Json_Put___;
+
+PROCEDURE Json_Put___(
+   json_    IN OUT NOCOPY Json_Object_T,
+   name_    IN            VARCHAR2,
+   value_   IN            NUMBER,
+   null_ok_ IN            BOOLEAN DEFAULT FALSE)
+IS 
+BEGIN
+   IF (value_ IS NOT NULL OR (value_ IS NULL AND null_ok_)) THEN 
+      json_.put(name_, value_);
+   END IF;
+END Json_Put___;
+-------------------- LU SPECIFIC PRIVATE METHODS ----------------------------
+
+
+-------------------- LU SPECIFIC PROTECTED METHODS --------------------------
+
+
+-------------------- LU SPECIFIC PUBLIC METHODS -----------------------------
+FUNCTION Get_Shipment_Rec (
+   shipment_id_      IN NUMBER,
+   freight_provider_ IN VARCHAR2,
+   origin_           IN Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_        IN VARCHAR2 DEFAULT 'FALSE') RETURN Sp_Shipment_Rec
+IS
+   return_rec_   Sp_Shipment_Rec;
+   
+   CURSOR get_shipment IS
+         SELECT sender_type,
+                sender_id,
+                contract,
+                ship_via_code,
+                delivery_terms
+         FROM shipment_tab
+         WHERE shipment_id = shipment_id_;
+   
+   -- (+) 230221  DIKUUS  G2325268-400 START
+   CURSOR get_billing_details IS
+         SELECT account, tp_name, tp_zip_code, tp_country_code , tp_account
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SHIPMENT
+         AND source_ref = to_char(shipment_id_);
+   -- (+) 230221  DIKUUS  G2325268-400 FINISH
+   
+   freight_terms_code_   frt_delivery_term_tab.freight_terms_code%TYPE; 
+   billing_details_      get_billing_details%ROWTYPE;
+   shipment_rec_         get_shipment%ROWTYPE;
+BEGIN
+   OPEN get_shipment;
+   FETCH get_shipment INTO shipment_rec_;
+   CLOSE get_shipment;
+   
+   return_rec_.external_transaction_id := to_char(shipment_id_);
+   return_rec_.transaction_id := NULL;
+   
+   return_rec_.shipment_map_tags := Get_Map_Tags_Arr(freight_provider_,
+                                                     Frt_Message_Level_API.DB_SHIPMENT,
+                                                     Frt_Map_Tag_Type_API.DB_SHIPMENT_TAG,
+                                                     Frt_Source_Ref_Type_API.DB_SHIPMENT,
+                                                     to_char(shipment_id_));
+   
+   IF(Check_Is_Null___(origin_)) THEN 
+      return_rec_.origin := Get_Origin_Rec(freight_provider_,
+                                           shipment_rec_.contract,
+                                           shipment_rec_.sender_type,
+                                           shipment_rec_.sender_id);
+   ELSE
+      return_rec_.origin := origin_;
+   END IF;
+   
+   return_rec_.destination := Get_Shipment_Destination_Rec(freight_provider_, shipment_id_);  
+   return_rec_.carrier_details.ship_x_ref := shipment_rec_.ship_via_code;
+   
+   freight_terms_code_ := Frt_Delivery_Term_API.Get_Freight_Terms_Code(freight_provider_, shipment_rec_.delivery_terms);
+   return_rec_.billing_details.freight_terms_code := freight_terms_code_;
+   
+   OPEN get_billing_details;
+   FETCH get_billing_details INTO billing_details_;
+   IF (get_billing_details%FOUND) THEN 
+      return_rec_.billing_details.freight_charge_account_number := billing_details_.account;
+      return_rec_.billing_details.country_code := billing_details_.tp_country_code;
+      return_rec_.billing_details.zip_postal_code := billing_details_.tp_zip_code;
+      IF (freight_terms_code_ = 'Third Party Billing') THEN 
+         return_rec_.billing_details.name := billing_details_.tp_name;
+      --   return_rec_.billing_details.country_code := billing_details_.tp_country_code;
+      --   return_rec_.billing_details.zip_postal_code := billing_details_.tp_zip_code;
+         -- (+) 230221  DIKUUS  G2325268-400 START
+         return_rec_.billing_details.freight_charge_account_number := billing_details_.tp_account;
+         -- (+) 230221  DIKUUS  G2325268-400 FINISH
+      END IF;
+   END IF;
+   CLOSE get_billing_details;  
+   
+   return_rec_.shipment_detail := Get_Shipment_Detail_Rec(freight_provider_, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), shipment_rec_.contract);
+   Get_Shipment_Options_Rec(to_char(shipment_id_), Frt_Source_Ref_Type_API.DB_SHIPMENT, return_rec_.shipment_detail.shipment_options, return_rec_.shipment_detail.ltl_options);      
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   return_rec_.shipment_service_codes := Get_Ship_Service_Codes_Arr(Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_));
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   return_rec_.message_list :=  Get_Shipment_Message_Arr(freight_provider_, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_));
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_SHIPMENT, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_));
+   return_rec_.package_details_list := Get_Package_Details_Arr(freight_provider_, shipment_id_);   
+   
+   IF (return_rec_.custom_fields IS NULL) THEN 
+      return_rec_.custom_fields := Sp_Custom_Fields_Arr();
+   END IF;
+   return_rec_.custom_fields.extend;
+   return_rec_.custom_fields(return_rec_.custom_fields.last).name := 'AutoPackShipment';
+   return_rec_.custom_fields(return_rec_.custom_fields.last).value := lower(auto_pack_);
+   
+   RETURN return_rec_;                                            
+END Get_Shipment_Rec;
+
+FUNCTION Get_Order_Ship_Rec(
+   order_no_         IN VARCHAR2,
+   freight_provider_ IN VARCHAR2,
+   origin_           IN Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_        IN VARCHAR2 DEFAULT 'TRUE') RETURN Sp_Shipment_Rec
+IS
+   
+   return_rec_   Sp_Shipment_Rec;
+   
+   CURSOR get_order IS
+         SELECT 'SITE' sender_type,
+                contract sender_id,
+                contract,
+                ship_via_code,
+                delivery_terms
+         FROM customer_order_tab
+         WHERE order_no = order_no_;
+   
+   CURSOR get_billing_details IS
+         SELECT account, tp_name, tp_zip_code, tp_country_code
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER
+         AND source_ref = order_no_;
+   
+   freight_terms_code_   frt_delivery_term_tab.freight_terms_code%TYPE; 
+   billing_details_      get_billing_details%ROWTYPE;
+   order_rec_            get_order%ROWTYPE;
+BEGIN
+   OPEN get_order;
+   FETCH get_order INTO order_rec_;
+   CLOSE get_order;
+   
+   return_rec_.external_transaction_id := order_no_;
+   return_rec_.transaction_id := NULL;
+   
+   --address_id_ := Company_Address_API.Get_Default_Address(Site_API.Get_Company(order_rec_.contract), 'Delivery');
+   
+   IF(Check_Is_Null___(origin_)) THEN 
+      return_rec_.origin := Get_Origin_Rec(freight_provider_,
+                                           order_rec_.contract,
+                                           order_rec_.sender_type,
+                                           order_rec_.sender_id);
+   ELSE
+      return_rec_.origin := origin_;
+   END IF;
+   
+   return_rec_.destination := Get_Order_Destination_Rec(order_no_);   
+   return_rec_.carrier_details.ship_x_ref := order_rec_.ship_via_code;
+   
+   freight_terms_code_ := Frt_Delivery_Term_API.Get_Freight_Terms_Code(freight_provider_, order_rec_.delivery_terms);
+   return_rec_.billing_details.freight_terms_code := freight_terms_code_;
+   
+   OPEN get_billing_details;
+   FETCH get_billing_details INTO billing_details_;
+   IF (get_billing_details%FOUND) THEN 
+      return_rec_.billing_details.freight_charge_account_number := billing_details_.account;
+      IF (freight_terms_code_ = 'Third Party Billing') THEN 
+         return_rec_.billing_details.name := billing_details_.tp_name;
+         return_rec_.billing_details.country_code := billing_details_.tp_country_code;
+         return_rec_.billing_details.zip_postal_code := billing_details_.tp_zip_code;
+      END IF;
+   END IF;
+   CLOSE get_billing_details;  
+   
+   return_rec_.shipment_detail := Get_Shipment_Detail_Rec(freight_provider_, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_, order_rec_.contract); 
+   Get_Shipment_Options_Rec(order_no_, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, return_rec_.shipment_detail.shipment_options, return_rec_.shipment_detail.ltl_options);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   return_rec_.shipment_service_codes := Get_Ship_Service_Codes_Arr(Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   --return_rec_.message_list := Get_Shipment_Message_Arr(freight_provider_, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_);
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_SHIPMENT, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_);
+   return_rec_.package_details_list := Get_Order_Shipment_Det_Arr(freight_provider_, order_no_);   
+   
+   IF (return_rec_.custom_fields IS NULL) THEN 
+      return_rec_.custom_fields := Sp_Custom_Fields_Arr();
+   END IF;
+   return_rec_.custom_fields.extend;
+   return_rec_.custom_fields(return_rec_.custom_fields.last).name := 'AutoPackShipment';
+   return_rec_.custom_fields(return_rec_.custom_fields.last).value := lower(auto_pack_);
+   
+   RETURN return_rec_;                                         
+END Get_Order_Ship_Rec;
+
+FUNCTION Get_Quote_Ship_Rec(
+   quotation_no_     IN VARCHAR2,
+   freight_provider_ IN VARCHAR2,
+   origin_           IN Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_        IN VARCHAR2 DEFAULT 'TRUE') RETURN Sp_Shipment_Rec
+IS
+   
+   return_rec_   Sp_Shipment_Rec;
+   
+   CURSOR get_quotation IS
+         SELECT 'SITE' sender_type,
+                contract sender_id,
+                contract,
+                ship_via_code,
+                delivery_terms
+         FROM order_quotation
+         WHERE quotation_no = quotation_no_;
+   
+   CURSOR get_billing_details IS
+         SELECT account, tp_name, tp_zip_code, tp_country_code
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SALES_QUOTE
+         AND source_ref = quotation_no_;
+   
+   freight_terms_code_   frt_delivery_term_tab.freight_terms_code%TYPE; 
+   billing_details_      get_billing_details%ROWTYPE;
+   quotation_rec_        get_quotation%ROWTYPE;
+BEGIN
+   OPEN get_quotation;
+   FETCH get_quotation INTO quotation_rec_;
+   CLOSE get_quotation;
+   
+   return_rec_.external_transaction_id := quotation_no_;
+   return_rec_.transaction_id := NULL;
+   --address_id_ := Company_Address_API.Get_Default_Address(Site_API.Get_Company(quotation_rec_.contract), 'Delivery');
+   
+   IF(Check_Is_Null___(origin_)) THEN 
+      return_rec_.origin := Get_Origin_Rec(freight_provider_,
+                                           quotation_rec_.contract,
+                                           quotation_rec_.sender_type,
+                                           quotation_rec_.sender_id);
+   ELSE
+      return_rec_.origin := origin_;
+   END IF;
+   
+   return_rec_.destination := Get_Quote_Destination_Rec(quotation_no_);
+   
+   return_rec_.carrier_details.ship_x_ref := quotation_rec_.ship_via_code;  
+   freight_terms_code_ := Frt_Delivery_Term_API.Get_Freight_Terms_Code(freight_provider_, quotation_rec_.delivery_terms);
+   return_rec_.billing_details.freight_terms_code := freight_terms_code_;
+   
+   OPEN get_billing_details;
+   FETCH get_billing_details INTO billing_details_;
+   IF (get_billing_details%FOUND) THEN 
+      return_rec_.billing_details.freight_charge_account_number := billing_details_.account;
+      IF (freight_terms_code_ = 'Third Party Billing') THEN 
+         return_rec_.billing_details.name := billing_details_.tp_name;
+         return_rec_.billing_details.country_code := billing_details_.tp_country_code;
+         return_rec_.billing_details.zip_postal_code := billing_details_.tp_zip_code;
+      END IF;
+   END IF;
+   CLOSE get_billing_details;  
+   
+   return_rec_.shipment_detail := Get_Shipment_Detail_Rec(freight_provider_, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_, quotation_rec_.contract);
+   Get_Shipment_Options_Rec(quotation_no_, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, return_rec_.shipment_detail.shipment_options, return_rec_.shipment_detail.ltl_options);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   return_rec_.shipment_service_codes := Get_Ship_Service_Codes_Arr(Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   --return_rec_.message_list :=  Get_Shipment_Message_Arr(freight_provider_, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_);
+   --return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_SHIPMENT, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_);
+   return_rec_.package_details_list := Get_Quote_Shipment_Det_Arr(freight_provider_, quotation_no_);   
+   
+   IF (return_rec_.custom_fields IS NULL) THEN 
+      return_rec_.custom_fields := Sp_Custom_Fields_Arr();
+   END IF;
+   return_rec_.custom_fields.extend;
+   return_rec_.custom_fields(return_rec_.custom_fields.last).name := 'AutoPackShipment';
+   return_rec_.custom_fields(return_rec_.custom_fields.last).value := lower(auto_pack_);
+   
+   RETURN return_rec_;                                             
+END Get_Quote_Ship_Rec;
+
+FUNCTION Get_Shipment_Order_Rec(
+   ship_order_id_    IN NUMBER,
+   freight_provider_ IN VARCHAR2,
+   origin_           IN Sp_Origin_Rec DEFAULT NULL,
+   auto_pack_        IN VARCHAR2 DEFAULT 'TRUE') RETURN Sp_Shipment_Rec
+IS
+   
+   return_rec_   Sp_Shipment_Rec;
+   
+   CURSOR get_ship_order IS
+         SELECT sender_type,
+                sender_id,
+                sender_contract contract,
+                ship_via_code,
+                delivery_terms,
+                receiver_contract
+         FROM shipment_order_tab
+         WHERE shipment_order_id = ship_order_id_;
+   
+   CURSOR get_billing_details IS
+         SELECT account, tp_name, tp_zip_code, tp_country_code
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER
+         AND source_ref = to_char(ship_order_id_);
+   
+   freight_terms_code_   frt_delivery_term_tab.freight_terms_code%TYPE; 
+   billing_details_      get_billing_details%ROWTYPE;
+   ship_order_rec_       get_ship_order%ROWTYPE;
+BEGIN
+   OPEN get_ship_order;
+   FETCH get_ship_order INTO ship_order_rec_;
+   CLOSE get_ship_order;
+   
+   return_rec_.external_transaction_id := to_char(ship_order_id_);
+   return_rec_.transaction_id := NULL;
+   
+   IF(Check_Is_Null___(origin_)) THEN 
+      return_rec_.origin := Get_Origin_Rec(freight_provider_,
+                                           ship_order_rec_.contract,
+                                           ship_order_rec_.sender_type,
+                                           ship_order_rec_.sender_id);
+   ELSE
+      return_rec_.origin := origin_;
+   END IF;
+   
+   return_rec_.destination := Get_Ship_Ord_Destination_Rec(ship_order_id_, ship_order_rec_.receiver_contract);   
+   return_rec_.carrier_details.ship_x_ref := ship_order_rec_.ship_via_code;
+   
+   freight_terms_code_ := Frt_Delivery_Term_API.Get_Freight_Terms_Code(freight_provider_, ship_order_rec_.delivery_terms);
+   return_rec_.billing_details.freight_terms_code := freight_terms_code_;
+   
+   OPEN get_billing_details;
+   FETCH get_billing_details INTO billing_details_;
+   IF (get_billing_details%FOUND) THEN 
+      return_rec_.billing_details.freight_charge_account_number := billing_details_.account;
+      IF (freight_terms_code_ = 'Third Party Billing') THEN 
+         return_rec_.billing_details.name := billing_details_.tp_name;
+         return_rec_.billing_details.country_code := billing_details_.tp_country_code;
+         return_rec_.billing_details.zip_postal_code := billing_details_.tp_zip_code;
+      END IF;
+   END IF;
+   CLOSE get_billing_details;  
+   
+   return_rec_.shipment_detail := Get_Shipment_Detail_Rec(freight_provider_, Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, to_char(ship_order_id_), ship_order_rec_.contract); 
+   Get_Shipment_Options_Rec(to_char(ship_order_id_), Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, return_rec_.shipment_detail.shipment_options, return_rec_.shipment_detail.ltl_options);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   return_rec_.shipment_service_codes := Get_Ship_Service_Codes_Arr(Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, to_char(ship_order_id_));
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   --return_rec_.message_list := Get_Shipment_Message_Arr(freight_provider_, Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, to_char(ship_order_id_));
+   --return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_SHIPMENT, Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, to_char(ship_order_id_));
+   return_rec_.package_details_list := Get_Shipment_Order_Det_Arr(freight_provider_, ship_order_id_);   
+   
+   IF (return_rec_.custom_fields IS NULL) THEN 
+      return_rec_.custom_fields := Sp_Custom_Fields_Arr();
+   END IF;
+   return_rec_.custom_fields.extend;
+   return_rec_.custom_fields(return_rec_.custom_fields.last).name := 'AutoPackShipment';
+   return_rec_.custom_fields(return_rec_.custom_fields.last).value := lower(auto_pack_);
+   
+   RETURN return_rec_;                                              
+END Get_Shipment_Order_Rec;
+
+PROCEDURE Get_Shipment_Options_Rec(
+   source_ref_       IN  VARCHAR2,
+   source_ref_type_  IN  VARCHAR2,
+   shipment_options_ OUT Sp_Shipment_Option_Arr,
+   ltl_options_      OUT Sp_Shipment_Option_Arr)
+IS    
+   value_             VARCHAR2(200);
+   
+   CURSOR get_incldued_services IS
+         SELECT ss.service_code, ss.service_value, bs.tag_name, bs.service_type
+         FROM frt_ship_service_tab bs, frt_shipping_service_tab ss
+         WHERE bs.service_code  = ss.service_code
+         AND ss.source_ref_type = source_ref_type_
+         AND ss.source_ref = source_ref_
+         AND ss.include_service = 'TRUE';   
+BEGIN
+   shipment_options_ := Sp_Shipment_Option_Arr();
+   ltl_options_      := Sp_Shipment_Option_Arr();
+   
+   FOR rec_ IN get_incldued_services LOOP 
+      IF (rec_.service_type = Frt_Service_Type_API.DB_SHIPMENT_OPTION) THEN 
+         shipment_options_.extend;
+         shipment_options_(shipment_options_.LAST).name := rec_.tag_name;
+         shipment_options_(shipment_options_.LAST).value := rec_.service_value;
+      ELSIF (rec_.service_type = Frt_Service_Type_API.DB_LTL_OPTION) THEN 
+         ltl_options_.extend;
+         ltl_options_(ltl_options_.LAST).name := rec_.tag_name;
+         ltl_options_(ltl_options_.LAST).value := rec_.service_value;
+      END IF;
+   END LOOP;
+END Get_Shipment_Options_Rec;
+
+FUNCTION Get_Ship_Service_Codes_Arr(
+   source_ref_type_  IN  VARCHAR2,
+   source_ref_       IN  VARCHAR2 ) RETURN Sp_Shipment_Service_Codes_Arr
+IS    
+   return_arr_              Sp_Shipment_Service_Codes_Arr := Sp_Shipment_Service_Codes_Arr();
+   
+   -- Shipment services that are codes in separate Shipment_Rec array, not Shipment or LTL options
+   CURSOR get_ship_svc_codes IS
+         SELECT ss.service_code, ss.service_value, bs.tag_name, bs.service_type
+         FROM frt_ship_service_tab bs, frt_shipping_service_tab ss
+         WHERE bs.service_code  = ss.service_code
+         AND ss.source_ref_type = source_ref_type_
+         AND ss.source_ref = source_ref_
+         AND ss.include_service = 'TRUE';
+BEGIN
+   
+   FOR rec_ IN get_ship_svc_codes LOOP 
+      IF (rec_.service_type = Frt_Service_Type_API.DB_SHIPMENT_SERVICES_CODE) THEN 
+         return_arr_.extend;
+         return_arr_(return_arr_.last).code := rec_.tag_name;
+      END IF;
+   END LOOP;
+   
+   RETURN return_arr_;
+END Get_Ship_Service_Codes_Arr;
+
+
+FUNCTION Shipment_Rec_To_Json (
+   rec_         IN Sp_Shipment_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE,
+   use_address_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS
+   
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+   json_array_  Json_Array_T;
+   
+BEGIN
+   json_.put('Location', rec_.location);
+   json_.put('ExternalTransactionId', rec_.external_transaction_id);
+   json_.put('TransactionId', rec_.transaction_id);
+   
+   -- Add additional mapped tags
+   IF (rec_.shipment_map_tags IS NOT NULL) THEN
+      IF (rec_.shipment_map_tags.count > 0) THEN
+         FOR i IN rec_.shipment_map_tags.first .. rec_.shipment_map_tags.last LOOP
+            IF(rec_.shipment_map_tags(i).name IS NOT NULL AND rec_.shipment_map_tags(i).value IS NOT NULL) THEN
+               json_.put(rec_.shipment_map_tags(i).name, rec_.shipment_map_tags(i).value);
+            END IF;
+         END LOOP;
+      END IF;
+   END IF;
+   
+   IF (NOT Check_Is_Null___(rec_.origin)) THEN
+      json_.Put('Origin', Origin_Rec_To_Json(rec_.origin, FALSE, use_address_));
+   ELSE
+      json_.Put_Null('Origin');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.destination)) THEN
+      json_.Put('Destination', Destination_Rec_To_Json(rec_.destination, FALSE));
+   ELSE
+      json_.Put_Null('Destination');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.carrier_details)) THEN
+      json_.Put('CarrierDetails', Carrier_Details_Rec_To_Json(rec_.carrier_details, FALSE));
+   ELSE
+      json_.Put_Null('CarrierDetails');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.billing_details)) THEN
+      json_.Put('BillingDetails', Billing_Details_Rec_To_Json(rec_.billing_details, FALSE));
+   ELSE
+      json_.Put_Null('BillingDetails');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.shipment_detail)) THEN
+      json_.Put('ShipmentDetail', Shipment_Detail_Rec_To_Json(rec_.shipment_detail, FALSE));
+   ELSE
+      json_.Put_Null('ShipmentDetail');
+   END IF;
+   
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+   json_array_ := Json_Array_T();
+   IF (rec_.shipment_service_codes IS NOT NULL) THEN
+      IF (rec_.shipment_service_codes.count > 0) THEN
+         json_array_ := Ship_Service_Codes_Arr_To_Json(rec_.shipment_service_codes);
+      END IF;
+   END IF;
+   json_.Put('shipmentServicesCodes', json_array_);
+   -- (+) 20241229 jomuus CS0206131 FI Shipping Services Mod (FINISH)
+   
+   json_array_ := Json_Array_T();
+   IF (rec_.message_list IS NOT NULL) THEN
+      IF (rec_.message_list.count > 0) THEN
+         json_array_ := Shipment_Message_Arr_To_Json(rec_.message_list);
+      END IF;
+   END IF;
+   json_.Put('MessageList', json_array_);
+   
+   json_array_ := Json_Array_T();
+   IF (rec_.custom_fields IS NOT NULL) THEN
+      IF (rec_.custom_fields.count > 0) THEN
+         json_array_ := Shipment_Cf_Arr_To_Json(rec_.custom_fields);
+      END IF;
+   END IF;
+   json_.Put('CustomFields', json_array_);
+   
+   json_array_ := Json_Array_T();
+   IF (rec_.package_details_list IS NOT NULL) THEN
+      IF (rec_.package_details_list.count > 0) THEN
+         FOR i IN rec_.package_details_list.first .. rec_.package_details_list.last LOOP
+            json_array_.append(Package_Details_Rec_To_Json(rec_.package_details_list(i), FALSE));
+         END LOOP;
+      END IF;
+   END IF;
+   json_.Put('PackageDetailsList', json_array_);
+   
+   IF (add_headers_) THEN
+      json_top_.Put('Shipment', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                              
+END Shipment_Rec_To_Json;
+
+FUNCTION Get_Origin_Rec (
+   freight_provider_id_ IN VARCHAR2,
+   contract_            IN VARCHAR2,
+   sender_type_         IN VARCHAR2,
+   sender_id_           IN VARCHAR2) RETURN Sp_Origin_Rec
+IS
+   
+   return_rec_  Sp_Origin_Rec;
+   
+   CURSOR get_attributes IS
+         SELECT 'Facility' location_type,
+         freight_site_code location_site,
+         freight_facility_code location_code
+         FROM frt_provider_location_tab
+         WHERE freight_provider_id = freight_provider_id_
+         AND   contract = contract_
+         AND   sender_type = sender_type_
+         AND   sender_id = sender_id_;
+   
+   attribute_rec_               get_attributes%ROWTYPE;
+BEGIN
+   
+   OPEN get_attributes;
+   FETCH get_attributes INTO attribute_rec_;
+   return_rec_.location_type := attribute_rec_.location_type;
+   return_rec_.location_site := attribute_rec_.location_site;
+   return_rec_.location_code := attribute_rec_.location_code;
+   CLOSE get_attributes;
+   RETURN return_rec_;
+   
+END Get_Origin_Rec;
+
+FUNCTION Origin_Rec_To_Json (
+   rec_         IN Sp_Origin_Rec,   
+   add_headers_ IN BOOLEAN DEFAULT FALSE,
+   use_address_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   IF (use_address_) THEN --actuall address was used
+      Json_Put___(json_, 'CompanyName', rec_.company_name);
+      Json_Put___(json_, 'Address1', rec_.address1);
+      Json_Put___(json_, 'Address2', rec_.address2);
+      Json_Put___(json_, 'Address3', rec_.address3);
+      Json_Put___(json_, 'City', rec_.city);
+      Json_Put___(json_, 'StateOrProvinceCode', rec_.state_or_province_code);
+      Json_Put___(json_, 'PostalCode', rec_.postal_code);
+      Json_Put___(json_, 'CountryCode', rec_.country_code);
+      Json_Put___(json_, 'ContactName', rec_.contact_name);
+      Json_Put___(json_, 'Email', rec_.email);
+      Json_Put___(json_, 'Phone', rec_.phone);
+   ELSE
+      json_.put('LocationType', rec_.location_type);
+      json_.put('LocationSite', rec_.location_site);
+      json_.put('LocationCode', rec_.location_code);
+   END IF;
+   IF (add_headers_) THEN
+      json_top_.Put('Origin', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                              
+END Origin_Rec_To_Json;
+
+FUNCTION Get_Shipment_Destination_Rec (
+   freight_provider_ IN VARCHAR2,
+   shipment_id_ IN NUMBER) RETURN Sp_Destination_Rec
+IS
+   
+   return_rec_ Sp_Destination_Rec;
+   CURSOR get_attributes IS
+         SELECT receiver_address_name company_name,
+         receiver_address1 address1,
+         receiver_address2 address2,
+         receiver_address3 address3,
+         receiver_city city,
+         receiver_state state_or_province_code,
+         receiver_zip_code postal_code,
+         receiver_country country_code
+         FROM SHIPMENT
+         WHERE shipment_id = shipment_id_;
+   
+   CURSOR get_ship_info IS
+         SELECT contact_name,
+            contact_email email,
+            contact_phone phone,
+            internal_note
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SHIPMENT
+         AND source_ref = to_char(shipment_id_); 
+   
+   attribute_rec_               get_attributes%ROWTYPE;
+   contact_rec_                 get_ship_info%ROWTYPE;
+BEGIN
+   OPEN get_attributes;
+   FETCH get_attributes INTO attribute_rec_;
+   return_rec_.company_name := attribute_rec_.company_name;
+   return_rec_.address1 := attribute_rec_.address1;
+   return_rec_.address2 := attribute_rec_.address2;
+   return_rec_.address3 := attribute_rec_.address3;
+   return_rec_.city := attribute_rec_.city;
+   return_rec_.state_or_province_code := attribute_rec_.state_or_province_code;
+   return_rec_.postal_code := attribute_rec_.postal_code;
+   return_rec_.country_code := attribute_rec_.country_code;
+   CLOSE get_attributes;
+   
+   OPEN get_ship_info;
+   FETCH get_ship_info INTO contact_rec_;
+   return_rec_.contact_name := contact_rec_.contact_name;
+   return_rec_.email := contact_rec_.email;
+   return_rec_.phone := contact_rec_.phone;
+   CLOSE get_ship_info;
+   
+   return_rec_.destination_map_tags := Get_Map_Tags_Arr(freight_provider_,
+                                                        Frt_Message_Level_API.DB_SHIPMENT,
+                                                        Frt_Map_Tag_Type_API.DB_DESTINATION_TAG,
+                                                        Frt_Source_Ref_Type_API.DB_SHIPMENT,
+                                                        to_char(shipment_id_));
+                                                     
+   RETURN return_rec_;    
+END Get_Shipment_Destination_Rec;
+
+FUNCTION Get_Ship_Ord_Destination_Rec (
+   shipment_order_id_ IN NUMBER,
+   receiver_contract_ IN VARCHAR2) RETURN Sp_Destination_Rec
+IS
+   return_rec_          Sp_Destination_Rec;
+   receiver_company_    customer_order.customer_no%TYPE; 
+   address_id_          company_address.address_id%TYPE;
+   
+   CURSOR get_receiver_address IS
+         SELECT  Company_API.Get_Name(company) company_name, address1, address2, address3,
+             city, state state_or_province_code, 
+             zip_code postal_code, country country_code
+         FROM company_address_tab
+         WHERE company = receiver_company_
+         AND party_type = 'COMPANY'
+         AND address_id = address_id_;
+   
+   CURSOR get_ship_info IS
+         SELECT contact_name,
+            contact_email email,
+            contact_phone phone,
+            internal_note
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER
+         AND source_ref = to_char(shipment_order_id_); 
+   
+   address_rec_    get_receiver_address%ROWTYPE;
+   contact_rec_    get_ship_info%ROWTYPE;
+BEGIN
+   receiver_company_ := Site_API.Get_Company(receiver_contract_); 
+   address_id_ := Shipment_Order_API.Get_Receiver_Address_Id(shipment_order_id_);
+   address_id_ := Nvl(address_id_, Company_Address_API.Get_Default_Address(receiver_company_, 'Delivery'));
+   
+   OPEN get_receiver_address;
+   FETCH get_receiver_address INTO address_rec_;
+   CLOSE get_receiver_address;
+   
+   return_rec_.company_name := address_rec_.company_name;
+   return_rec_.address1 := address_rec_.address1;
+   return_rec_.address2 := address_rec_.address2;
+   return_rec_.address3 := address_rec_.address3;
+   return_rec_.city := address_rec_.city;
+   return_rec_.state_or_province_code := address_rec_.state_or_province_code;
+   return_rec_.postal_code := address_rec_.postal_code;
+   return_rec_.country_code := address_rec_.country_code;
+   
+   OPEN get_ship_info;
+   FETCH get_ship_info INTO contact_rec_;
+   return_rec_.contact_name := contact_rec_.contact_name;
+   return_rec_.email := contact_rec_.email;
+   return_rec_.phone := contact_rec_.phone;
+   CLOSE get_ship_info;
+   
+   RETURN return_rec_;                              
+END Get_Ship_Ord_Destination_Rec;
+
+FUNCTION Get_Order_Destination_Rec (
+   order_no_ IN VARCHAR2) RETURN Sp_Destination_Rec
+IS   
+   addr_flag_     customer_order.addr_flag_db%TYPE;
+   ship_addr_no_  customer_order.ship_addr_no%TYPE;
+   customer_no_   customer_order.customer_no%TYPE;
+   return_rec_    Sp_Destination_Rec;
+   
+   CURSOR get_customer_address IS
+         SELECT NAME company_name, address1, address2, address3, 
+                city, state state_or_province_code, 
+                zip_code postal_code, country country_code
+         FROM customer_info_address_tab
+         WHERE customer_id = customer_no_
+         AND address_id = ship_addr_no_;
+   
+   address_rec_   get_customer_address%ROWTYPE;
+   
+   CURSOR get_order_address IS
+         SELECT addr_1 company_name, address1, address2, address3,
+             city, state state_or_province_code, 
+             zip_code postal_code, country_code
+         FROM customer_order_address_tab
+         WHERE order_no = order_no_;
+   
+   CURSOR get_ship_info IS
+         SELECT contact_name,
+            contact_email email,
+            contact_phone phone,
+            internal_note
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER
+         AND source_ref = order_no_; 
+   
+   contact_rec_    get_ship_info%ROWTYPE;
+BEGIN
+   addr_flag_ := Customer_Order_API.Get_Addr_Flag_Db(order_no_);   
+   IF (addr_flag_ = 'N') THEN 
+      customer_no_ := Customer_Order_API.Get_Customer_No(order_no_);
+      ship_addr_no_ := Customer_Order_API.Get_Ship_Addr_No(order_no_);
+      OPEN get_customer_address;
+      FETCH get_customer_address INTO address_rec_;
+      CLOSE get_customer_address;
+   ELSE
+      OPEN get_order_address;
+      FETCH get_order_address INTO address_rec_;
+      CLOSE get_order_address;
+   END IF;
+   
+   return_rec_.company_name := address_rec_.company_name;
+   return_rec_.address1 := address_rec_.address1;
+   return_rec_.address2 := address_rec_.address2;
+   return_rec_.address3 := address_rec_.address3;
+   return_rec_.city := address_rec_.city;
+   return_rec_.state_or_province_code := address_rec_.state_or_province_code;
+   return_rec_.postal_code := address_rec_.postal_code;
+   return_rec_.country_code := address_rec_.country_code;
+   
+   OPEN get_ship_info;
+   FETCH get_ship_info INTO contact_rec_;
+   return_rec_.contact_name := contact_rec_.contact_name;
+   return_rec_.email := contact_rec_.email;
+   return_rec_.phone := contact_rec_.phone;
+   CLOSE get_ship_info;
+   
+   RETURN return_rec_; 
+END Get_Order_Destination_Rec;
+
+FUNCTION Get_Quote_Destination_Rec (
+   quotation_no_ IN VARCHAR2) RETURN Sp_Destination_Rec
+IS   
+   ship_addr_no_  order_quotation.ship_addr_no%TYPE;
+   customer_no_   order_quotation.customer_no%TYPE;
+   return_rec_    Sp_Destination_Rec;
+   
+   CURSOR get_quotation_address IS
+         SELECT ship_addr_name company_name, ship_address1 address1, ship_address2 address2, 
+                ship_address3 address3, ship_addr_city city, ship_addr_state state_or_province_code, 
+                ship_addr_zip_code postal_code, ship_addr_country_code country_code,
+               NULL contact_name,
+               NULL email,
+               NULL phone
+         FROM order_quotation_tab
+         WHERE quotation_no = quotation_no_;
+   
+   CURSOR get_customer_address IS
+         SELECT NAME company_name, address1, address2, address3, 
+                city, state state_or_province_code, 
+                zip_code postal_code, country country_code,
+                NULL contact_name,
+                NULL email,
+                NULL phone
+         FROM customer_info_address_tab
+         WHERE customer_id = customer_no_
+         AND address_id = ship_addr_no_;
+   
+   address_rec_   get_customer_address%ROWTYPE;
+   
+   CURSOR get_ship_info IS
+         SELECT contact_name,
+            contact_email email,
+            contact_phone phone,
+            internal_note
+         FROM frt_shipping_info_tab
+         WHERE source_ref_type = Frt_Source_Ref_Type_API.DB_SALES_QUOTE
+         AND source_ref = quotation_no_; 
+   
+   contact_rec_    get_ship_info%ROWTYPE;
+BEGIN  
+   IF Order_Quotation_API.Get_Single_Occ_Addr_Flag(quotation_no_) = 'TRUE' THEN 
+      OPEN get_quotation_address;
+      FETCH get_quotation_address INTO address_rec_;
+      CLOSE get_quotation_address;
+   ELSE 
+      customer_no_ := Order_Quotation_API.Get_Customer_No(quotation_no_);
+      ship_addr_no_ := Order_Quotation_API.Get_Ship_Addr_No(quotation_no_);
+       
+      OPEN get_customer_address;
+      FETCH get_customer_address INTO address_rec_;
+      CLOSE get_customer_address;
+   END IF;
+   
+   return_rec_.company_name := address_rec_.company_name;
+   return_rec_.address1 := address_rec_.address1;
+   return_rec_.address2 := address_rec_.address2;
+   return_rec_.address3 := address_rec_.address3;
+   return_rec_.city := address_rec_.city;
+   return_rec_.state_or_province_code := address_rec_.state_or_province_code;
+   return_rec_.postal_code := address_rec_.postal_code;
+   return_rec_.country_code := address_rec_.country_code;
+   
+   OPEN get_ship_info;
+   FETCH get_ship_info INTO contact_rec_;
+   return_rec_.contact_name := contact_rec_.contact_name;
+   return_rec_.email := contact_rec_.email;
+   return_rec_.phone := contact_rec_.phone;
+   CLOSE get_ship_info;
+   
+   RETURN return_rec_;     
+END Get_Quote_Destination_Rec;
+
+FUNCTION Destination_Rec_To_Json (
+   rec_         IN Sp_Destination_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS   
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   Json_Put___(json_, 'CompanyName', rec_.company_name);
+   Json_Put___(json_, 'Address1', rec_.address1);
+   Json_Put___(json_, 'Address2', rec_.address2);
+   Json_Put___(json_, 'Address3', rec_.address3);
+   Json_Put___(json_, 'City', rec_.city);
+   Json_Put___(json_, 'StateOrProvinceCode', rec_.state_or_province_code);
+   Json_Put___(json_, 'PostalCode', rec_.postal_code);
+   Json_Put___(json_, 'CountryCode', rec_.country_code);
+   Json_Put___(json_, 'ContactName', rec_.contact_name);
+   Json_Put___(json_, 'Email', rec_.email);
+   Json_Put___(json_, 'Phone', rec_.phone);
+   
+   -- Add additional mapped tags
+   IF (rec_.destination_map_tags IS NOT NULL) THEN
+      IF (rec_.destination_map_tags.count > 0) THEN
+         FOR i IN rec_.destination_map_tags.first .. rec_.destination_map_tags.last LOOP
+            IF(rec_.destination_map_tags(i).name IS NOT NULL AND rec_.destination_map_tags(i).value IS NOT NULL) THEN
+               -- (+/-) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+               IF (rec_.destination_map_tags(i).name = 'Residential') THEN
+                  json_.put(rec_.destination_map_tags(i).name, to_number(rec_.destination_map_tags(i).VALUE));
+               ELSE
+                  json_.put(rec_.destination_map_tags(i).name, rec_.destination_map_tags(i).value);
+               END IF;
+               -- (+/-) 20241229 jomuus CS0206131 FI Shipping Services Mod (START)
+            END IF;
+         END LOOP;
+      END IF;
+   END IF;
+   
+   IF (add_headers_) THEN
+      json_top_.Put('Destination', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Destination_Rec_To_Json;
+
+FUNCTION Carrier_Details_Rec_To_Json (
+   rec_         IN Sp_Carrier_Details_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   Json_Put___(json_, 'ShipXRef', rec_.ship_x_ref);
+   IF (add_headers_) THEN
+      json_top_.Put('CarrierDetails', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Carrier_Details_Rec_To_Json;
+
+FUNCTION Billing_Details_Rec_To_Json (
+   rec_         IN Sp_Billing_Details_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   Json_Put___(json_, 'FreightTermsCode', rec_.freight_terms_code);
+   Json_Put___(json_, 'Name', rec_.name);
+   Json_Put___(json_, 'FreightChargeAccountNumber', rec_.freight_charge_account_number);
+   Json_Put___(json_, 'ZipPostalCode', rec_.zip_postal_code);
+   Json_Put___(json_, 'CountryCode', rec_.country_code);
+   IF (add_headers_) THEN
+      json_top_.Put('BillingDetails', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Billing_Details_Rec_To_Json;
+
+FUNCTION Shipment_Detail_Rec_To_Json (
+   rec_         IN Sp_Shipment_Detail_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   Json_Put___(json_, 'UserField1', rec_.user_field1); 
+   Json_Put___(json_, 'UserField2', rec_.user_field2);
+   Json_Put___(json_, 'UserField3', rec_.user_field3);
+   Json_Put___(json_, 'UserField4', rec_.user_field4);
+   Json_Put___(json_, 'UserField5', rec_.user_field5);
+   Json_Put___(json_, 'UserField6', rec_.user_field6);
+   Json_Put___(json_, 'UserField7', rec_.user_field7);
+   Json_Put___(json_, 'UserField8', rec_.user_field8);
+   Json_Put___(json_, 'weightUOM', rec_.weight_uom);
+   
+   -- Add additional mapped tags
+   IF (rec_.shipment_detail_map_tags IS NOT NULL) THEN
+      IF (rec_.shipment_detail_map_tags.count > 0) THEN
+         FOR i IN rec_.shipment_detail_map_tags.first .. rec_.shipment_detail_map_tags.last LOOP
+            IF(rec_.shipment_detail_map_tags(i).name IS NOT NULL AND rec_.shipment_detail_map_tags(i).value IS NOT NULL) THEN
+               json_.put(rec_.shipment_detail_map_tags(i).name, rec_.shipment_detail_map_tags(i).value);
+            END IF;
+         END LOOP;
+      END IF;
+   END IF;
+   
+   json_.Put('ShipmentOptions', Shipment_Options_Rec_To_Json(rec_.shipment_options));
+   json_.Put('LTLOptions', Shipment_Options_Rec_To_Json(rec_.ltl_options));
+   
+   IF (add_headers_) THEN
+      json_top_.Put('ShipmentDetail', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Shipment_Detail_Rec_To_Json;
+
+FUNCTION Shipment_Options_Rec_To_Json (
+   rec_ IN Sp_Shipment_Option_Arr) RETURN Json_Object_T
+IS
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   
+   IF (rec_.count > 0) THEN
+      FOR i IN rec_.FIRST..rec_.LAST LOOP
+         IF(rec_(i).name IS NOT NULL) THEN 
+            json_.put(rec_(i).name, rec_(i).value);
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN json_;  
+END Shipment_Options_Rec_To_Json;
+
+FUNCTION Ship_Service_Codes_Rec_To_Json (
+   rec_         IN Sp_Shipment_Service_Codes_Rec) RETURN Json_Object_T
+IS  
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   IF(rec_.code IS NOT NULL) THEN 
+      json_.put('code', rec_.code);
+   END IF;
+
+   RETURN json_;                
+END Ship_Service_Codes_Rec_To_Json;
+
+FUNCTION Ship_Service_Codes_Arr_To_Json (
+   arr_ IN Sp_Shipment_Service_Codes_Arr) RETURN Json_Array_T
+IS
+   json_array_    Json_Array_T := Json_Array_T();
+BEGIN
+   IF (arr_ IS NOT NULL) THEN
+      FOR elem IN 1 .. arr_.count LOOP
+         json_array_.append(Ship_Service_Codes_Rec_To_Json(arr_(elem)));
+      END LOOP;
+   END IF;
+   
+   RETURN json_array_;
+END Ship_Service_Codes_Arr_To_Json;
+
+
+FUNCTION Shipment_Message_Rec_To_Json (
+   rec_         IN Sp_Name_Value_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   IF(rec_.name IS NOT NULL) THEN 
+      json_.put('Name', rec_.name);
+      json_.put('Value', rec_.value);
+   END IF;
+   IF (add_headers_) THEN
+      json_top_.Put('ShipmentMessage', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Shipment_Message_Rec_To_Json;
+
+FUNCTION Shipment_Message_Arr_To_Json (
+   arr_ IN Sp_Shipment_Message_Arr) RETURN Json_Array_T
+IS    
+   json_array_    Json_Array_T := Json_Array_T(); 
+BEGIN
+   IF (arr_ IS NOT NULL) THEN
+      FOR elem IN 1 .. arr_.count LOOP
+         IF(arr_(elem).name IS NOT NULL AND arr_(elem).value IS NOT NULL) THEN 
+            json_array_.append(Shipment_Message_Rec_To_Json(arr_(elem), FALSE));
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN json_array_;
+END Shipment_Message_Arr_To_Json;
+
+FUNCTION Shipment_Cf_Rec_To_Json (
+   rec_         IN Sp_Name_Value_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS   
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   IF(rec_.name IS NOT NULL) THEN 
+      json_.put('Name', rec_.name);
+      json_.put('Value', rec_.value);
+   END IF;
+   IF (add_headers_) THEN
+      json_top_.Put('CustomFields', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Shipment_Cf_Rec_To_Json;
+
+FUNCTION Shipment_Cf_Arr_To_Json (
+   arr_ IN Sp_Custom_Fields_Arr) RETURN Json_Array_T
+IS
+   json_array_    Json_Array_T := Json_Array_T(); 
+BEGIN
+   IF (arr_ IS NOT NULL) THEN
+      FOR elem IN 1 .. arr_.count LOOP
+         IF(arr_(elem).name IS NOT NULL AND arr_(elem).value IS NOT NULL) THEN
+            json_array_.append(Shipment_Cf_Rec_To_Json(arr_(elem), FALSE));
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN json_array_;
+END Shipment_Cf_Arr_To_Json;
+
+FUNCTION Package_Details_Rec_To_Json (
+   rec_         IN Sp_Package_Details_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS   
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+   json_array_  Json_Array_T;
+BEGIN 
+   Json_Put___(json_, 'Weight', rec_.weight);
+   IF rec_.package_number IS NOT NULL THEN
+      Json_Put___(json_, 'PackageNumber', rec_.package_number);
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.dimensions)) THEN
+      json_.Put('Dimensions', Dimensions_Rec_To_Json(rec_.dimensions, FALSE));
+   END IF;
+   json_array_ := Json_Array_T();
+   IF (rec_.product_details_list IS NOT NULL) THEN
+      IF (rec_.product_details_list.count > 0) THEN
+         FOR i IN rec_.product_details_list.first .. rec_.product_details_list.last LOOP
+            json_array_.append(Product_Details_Rec_To_Json(rec_.product_details_list(i), FALSE));
+         END LOOP;
+      END IF;
+   END IF;
+   json_.Put('ProductDetailsList', json_array_);
+   IF (add_headers_) THEN
+      json_top_.Put('PackageDetails', json_);
+      RETURN json_top_;
+   END IF;
+   
+   json_array_ := Json_Array_T();
+   IF (rec_.custom_fields IS NOT NULL) THEN
+      IF (rec_.custom_fields.count > 0) THEN
+         json_array_ := Shipment_Cf_Arr_To_Json(rec_.custom_fields);
+      END IF;
+   END IF;
+   json_.Put('CustomFields', json_array_);
+   
+   Json_Put___(json_, 'UserField1', rec_.user_field1); 
+   Json_Put___(json_, 'UserField2', rec_.user_field2);
+   Json_Put___(json_, 'UserField3', rec_.user_field3);
+   Json_Put___(json_, 'UserField4', rec_.user_field4);
+   Json_Put___(json_, 'UserField5', rec_.user_field5);
+   Json_Put___(json_, 'UserField6', rec_.user_field6);
+   Json_Put___(json_, 'UserField7', rec_.user_field7);
+   
+   RETURN json_;                
+END Package_Details_Rec_To_Json;
+
+FUNCTION Package_Details_Arr_To_Json (
+   arr_ IN Sp_Package_Details_Arr) RETURN Json_Array_T
+IS
+   json_array_    Json_Array_T := Json_Array_T();
+BEGIN
+   IF (arr_ IS NOT NULL) THEN
+      FOR elem IN 1 .. arr_.count LOOP
+         json_array_.append(Package_Details_Rec_To_Json(arr_(elem), FALSE));
+      END LOOP;
+   END IF;
+   RETURN json_array_;
+END Package_Details_Arr_To_Json;
+
+FUNCTION Dimensions_Rec_To_Json (
+   rec_         IN Sp_Dimensions_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+   json_array_  Json_Array_T;
+   
+BEGIN
+   Json_Put___(json_, 'Length', rec_.length);
+   Json_Put___(json_, 'Width', rec_.width);
+   Json_Put___(json_, 'Height', rec_.height);
+   Json_Put___(json_, 'Units', Frt_Int_Utility_API.IFS_To_Pacejet_Dim_Uom(rec_.units));
+   IF (add_headers_) THEN
+      json_top_.Put('Dimensions', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Dimensions_Rec_To_Json;
+
+FUNCTION Product_Details_Rec_To_Json (
+   rec_         IN Sp_Product_Details_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+   json_array_  Json_Array_T;
+   
+BEGIN
+   json_.put('Number', rec_.number);
+   json_.put('Description', rec_.description);
+   json_.put('CommodityName', rec_.commodity_name);
+   
+   Json_Put___(json_, 'Weight', rec_.weight);
+   Json_Put___(json_, 'AutoPack', rec_.auto_pack);
+   --Json_Put___(json_, 'packUIRmngItem', rec_.pack_ui_rmng_item);
+   
+   IF (NOT Check_Is_Null___(rec_.dimensions)) THEN
+      json_.Put('Dimensions', Dimensions_Rec_To_Json(rec_.dimensions, FALSE));
+   ELSE
+      json_.Put_Null('Dimensions');
+   END IF;
+   
+   IF (NOT Check_Is_Null___(rec_.quantity)) THEN
+      json_.Put('Quantity', Quantity_Rec_To_Json(rec_.quantity, FALSE));
+   ELSE
+      json_.Put_Null('Quantity');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.cost)) THEN
+      json_.Put('Cost', Cost_Rec_To_Json(rec_.cost, FALSE));
+   ELSE
+      json_.Put_Null('Cost');
+   END IF;
+   IF (NOT Check_Is_Null___(rec_.price)) THEN
+      json_.Put('Price', Price_Rec_To_Json(rec_.price, FALSE));
+   ELSE
+      json_.Put_Null('Price');
+   END IF;
+   
+   -- Add additional mapped tags
+   IF (rec_.product_detail_map_tags IS NOT NULL) THEN
+      IF (rec_.product_detail_map_tags.count > 0) THEN
+         FOR i IN rec_.product_detail_map_tags.first .. rec_.product_detail_map_tags.last LOOP
+            IF(rec_.product_detail_map_tags(i).name IS NOT NULL AND rec_.product_detail_map_tags(i).value IS NOT NULL) THEN
+               json_.put(rec_.product_detail_map_tags(i).name, rec_.product_detail_map_tags(i).value);
+            END IF;
+         END LOOP;
+      END IF;
+   END IF;
+   
+   json_array_ := Json_Array_T();
+   IF (rec_.custom_fields IS NOT NULL) THEN
+      IF (rec_.custom_fields.count > 0) THEN
+         json_array_ := Shipment_Cf_Arr_To_Json(rec_.custom_fields);
+      END IF;
+   END IF;
+   json_.Put('CustomFields', json_array_);
+   
+   IF (add_headers_) THEN
+      json_top_.Put('ProductDetails', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Product_Details_Rec_To_Json;
+
+FUNCTION Product_Details_Arr_To_Json (
+   arr_ IN Sp_Product_Details_Arr) RETURN Json_Array_T
+IS
+   json_array_    Json_Array_T := Json_Array_T();
+BEGIN
+   IF (arr_ IS NOT NULL) THEN
+      FOR elem IN 1 .. arr_.count LOOP
+         json_array_.append(Product_Details_Rec_To_Json(arr_(elem), FALSE));
+      END LOOP;
+   END IF;
+   RETURN json_array_;
+END Product_Details_Arr_To_Json;
+
+FUNCTION Quantity_Rec_To_Json (
+   rec_         IN Sp_Quantity_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   json_.put('Units', rec_.units);
+   json_.put('Value', rec_.value);
+   IF (add_headers_) THEN
+      json_top_.Put('Quantity', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Quantity_Rec_To_Json;
+
+FUNCTION Cost_Rec_To_Json (
+   rec_         IN Sp_Cost_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   json_.put('Currency', rec_.currency);
+   json_.put('Amount', rec_.amount);
+   IF (add_headers_) THEN
+      json_top_.Put('Cost', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Cost_Rec_To_Json;
+
+FUNCTION Price_Rec_To_Json (
+   rec_         IN Sp_Price_Rec,
+   add_headers_ IN BOOLEAN DEFAULT FALSE) RETURN Json_Object_T
+IS  
+   json_top_    Json_Object_T := Json_Object_T();
+   json_        Json_Object_T := Json_Object_T();
+BEGIN
+   json_.put('Currency', rec_.currency);
+   json_.put('Amount', rec_.amount);
+   IF (add_headers_) THEN
+      json_top_.Put('Price', json_);
+      RETURN json_top_;
+   END IF;
+   RETURN json_;                
+END Price_Rec_To_Json;
+
+FUNCTION Get_Package_Details_Arr (
+   freight_provider_ IN VARCHAR2,
+   shipment_id_      IN NUMBER) RETURN Sp_Package_Details_Arr
+IS
+   return_arr_           Sp_Package_Details_Arr := Sp_Package_Details_Arr();
+   product_details_      Sp_Product_Details_Arr := Sp_Product_Details_Arr();
+   price_rounding_       NUMBER;
+   cost_rounding_        NUMBER;
+   company_              VARCHAR2(30);
+   contract_             VARCHAR2(5);
+   total_weight_         NUMBER;
+   attr_                 VARCHAR2(500);
+   
+   CURSOR top_level_handl_units IS
+         SELECT handling_unit_type_id, handling_unit_id, operative_gross_weight weight, upper(uom_for_weight) units
+         FROM handling_unit_shipment
+         WHERE shipment_id = shipment_id_
+         AND structure_level = 1;
+   
+   CURSOR get_unattached_items IS
+         SELECT source_part_no, source_part_description, source_unit_meas, remaining_qty_to_attach quantity,
+            source_ref1, source_ref2, source_ref3, source_ref4,
+            --Customer_Order_Line_API.Get_Part_Cost(contract_, source_part_no) unit_cost,
+            Inventory_Part_Cost_API.Get_Part_Cost(contract_, Sales_Part_API.Get_Part_No(contract_, source_part_no))*conv_factor unit_cost,
+            Customer_Order_Line_API.Get_Sale_Unit_Price(source_ref1, source_ref2, source_ref3, source_ref4) unit_price,
+            Customer_Order_API.Get_Currency_Code(source_ref1) sales_currency_code,
+            Company_Finance_API.Get_Currency_Code(company_) cost_currency_code,
+            Inventory_Part_API.Get_Prime_Commodity(contract_, Sales_Part_API.Get_Part_No(contract_, source_part_no)) commodity,
+            Sales_Part_API.Get_Gross_Weight(contract_, source_part_no) unit_weight
+         FROM shipment_connectable_line
+         WHERE shipment_id = shipment_id_ 
+         AND remaining_qty_to_attach > 0;
+BEGIN
+   -- add attached shipment lines (packed items):
+   FOR rec_ IN top_level_handl_units LOOP
+      return_arr_.extend;
+      IF (rec_.weight > 0) THEN 
+         return_arr_(return_arr_.last).weight := round(rec_.weight, 4);
+      END IF;
+      IF (NVL(Frt_Provider_Config_Value_API.Get_Config_Value(freight_provider_, 'SEND_CONTAINER_NO'), 'FALSE') = 'TRUE') THEN
+         return_arr_(return_arr_.last).package_number := rec_.handling_unit_type_id;
+      END IF;
+      return_arr_(return_arr_.last).dimensions := Get_Dimensions_Rec(shipment_id_, rec_.handling_unit_id);
+      return_arr_(return_arr_.last).product_details_list := Get_Product_Details_Arr(freight_provider_, shipment_id_, rec_.handling_unit_id);
+      
+      Client_SYS.Clear_Attr(attr_);
+      Client_SYS.Add_To_Attr('HANDLING_UNIT_ID', rec_.handling_unit_id, attr_);
+      return_arr_(return_arr_.last).custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_HANDLING_UNIT, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+      Get_Package_User_Fields(freight_provider_, return_arr_(return_arr_.last), Frt_Message_Level_API.DB_HANDLING_UNIT, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+   END LOOP;
+   
+   -- add unattcahed items (unpacked items)
+   contract_ := Shipment_API.Get_Contract(shipment_id_);
+   company_ := Site_API.Get_Company(contract_);
+   cost_rounding_ := Nvl(Currency_Code_API.Get_Currency_Rounding(company_, Company_Finance_API.Get_Currency_Code(company_)), 2);
+   price_rounding_ := Nvl(Currency_Code_API.Get_Currency_Rounding(company_, Customer_Order_API.Get_Currency_Code(Shipment_API.Get_Source_Ref1(shipment_id_))), 2);  
+   
+   total_weight_ := 0;
+   FOR rec_ IN get_unattached_items LOOP  
+      product_details_.extend;
+      product_details_(product_details_.last).number := rec_.source_part_no;
+      product_details_(product_details_.last).description := rec_.source_part_description;
+      product_details_(product_details_.last).commodity_name := rec_.commodity;
+      --product_details_(product_details_.last).pack_ui_rmng_item := 'Y';
+      product_details_(product_details_.last).quantity.units := rec_.source_unit_meas;
+      product_details_(product_details_.last).quantity.value := rec_.quantity;
+      product_details_(product_details_.last).cost.currency := rec_.cost_currency_code ;
+      product_details_(product_details_.last).cost.amount := round(rec_.unit_cost, cost_rounding_);
+      product_details_(product_details_.last).price.currency := rec_.sales_currency_code;
+      product_details_(product_details_.last).price.amount := round(rec_.unit_price, price_rounding_); 
+      product_details_(product_details_.last).auto_pack := 'true';
+      
+      Client_SYS.Clear_Attr(attr_);
+      Client_SYS.Add_To_Attr('ORDER_NO', rec_.source_ref1, attr_);
+      Client_SYS.Add_To_Attr('LINE_NO', rec_.source_ref2, attr_);
+      Client_SYS.Add_To_Attr('REL_NO', rec_.source_ref3, attr_);
+      Client_SYS.Add_To_Attr('LINE_ITEM_NO', rec_.source_ref4, attr_);
+      Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+      Client_SYS.Add_To_Attr('CATALOG_NO', rec_.source_part_no, attr_);
+      Client_SYS.Add_To_Attr('PART_NO', Sales_Part_API.Get_Part_No(contract_, rec_.source_part_no), attr_);
+      --(+) 240327 DIKUUS START Add get map tags
+      product_details_(product_details_.last).product_detail_map_tags := Get_Map_Tags_Arr(freight_provider_,
+                                                                                Frt_Message_Level_API.DB_LINE_ITEM,
+                                                                                Frt_Map_Tag_Type_API.DB_PRODUCT_DETAIL_TAG,
+                                                                                Frt_Source_Ref_Type_API.DB_SHIPMENT,
+                                                                                to_char(shipment_id_),
+                                                                                attr_);
+      --(+) 240327 DIKUUS FINISH
+      product_details_(product_details_.last).custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);    
+      product_details_(product_details_.last).dimensions := Get_Product_Dimensions_Rec(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+      total_weight_ := total_weight_ + (rec_.quantity * nvl(rec_.unit_weight, 0));
+   END LOOP;
+   
+   IF (product_details_.COUNT > 0) THEN 
+      return_arr_.extend;
+      IF (total_weight_ > 0) THEN 
+         return_arr_(return_arr_.last).weight := round(total_weight_, 4);
+      END IF;
+      return_arr_(return_arr_.last).product_details_list := product_details_;
+      
+      Client_SYS.Clear_Attr(attr_);
+      Client_SYS.Add_To_Attr('HANDLING_UNIT_ID', '', attr_);
+      return_arr_(return_arr_.last).custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_HANDLING_UNIT, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+      Get_Package_User_Fields(freight_provider_, return_arr_(return_arr_.last), Frt_Message_Level_API.DB_HANDLING_UNIT, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+   END IF;
+   RETURN return_arr_;                       
+END Get_Package_Details_Arr;
+
+FUNCTION Get_Order_Shipment_Det_Arr (
+   freight_provider_ IN VARCHAR2,
+   order_no_         IN VARCHAR2) RETURN Sp_Package_Details_Arr
+IS  
+   return_arr_ Sp_Package_Details_Arr := Sp_Package_Details_Arr();
+BEGIN
+   return_arr_.extend;
+   --return_arr_(return_arr_.last).weight := Customer_Order_API.Get_Total_Gross_Weight__(order_no_);
+   return_arr_(return_arr_.last).dimensions := NULL;
+   return_arr_(return_arr_.last).product_details_list := Get_Order_Prod_Details_Arr(freight_provider_, order_no_);
+   
+   RETURN return_arr_;                    
+END Get_Order_Shipment_Det_Arr;
+
+FUNCTION Get_Quote_Shipment_Det_Arr (
+   freight_provider_ IN VARCHAR2,
+   quotation_no_     IN VARCHAR2) RETURN Sp_Package_Details_Arr
+IS   
+   return_arr_ Sp_Package_Details_Arr := Sp_Package_Details_Arr();
+BEGIN
+   return_arr_.extend;
+   --return_arr_(return_arr_.last).weight := Order_Quotation_API.Get_Total_Weight__(quotation_no_);
+   return_arr_(return_arr_.last).dimensions := NULL;
+   return_arr_(return_arr_.last).product_details_list := Get_Quote_Prod_Details_Arr(freight_provider_, quotation_no_);
+   
+   RETURN return_arr_;                        
+END Get_Quote_Shipment_Det_Arr;
+
+FUNCTION Get_Shipment_Order_Det_Arr (
+   freight_provider_ IN VARCHAR2,
+   ship_order_id_    IN NUMBER) RETURN Sp_Package_Details_Arr
+IS 
+   return_arr_ Sp_Package_Details_Arr := Sp_Package_Details_Arr();
+BEGIN
+   return_arr_.extend;
+   return_arr_(return_arr_.last).weight := NULL;
+   return_arr_(return_arr_.last).dimensions := NULL;
+   return_arr_(return_arr_.last).product_details_list := Get_Ship_Ord_Prod_Details_Arr(freight_provider_, ship_order_id_);
+   
+   RETURN return_arr_;                         
+END Get_Shipment_Order_Det_Arr;
+
+FUNCTION Get_Product_Details_Arr (
+   freight_provider_     IN VARCHAR2,
+   shipment_id_          IN NUMBER,
+   top_handling_unit_id_ IN NUMBER) RETURN Sp_Product_Details_Arr
+IS
+   return_arr_        Sp_Product_Details_Arr := Sp_Product_Details_Arr();
+   price_rounding_    NUMBER;
+   cost_rounding_     NUMBER;
+   company_           VARCHAR2(30);
+   contract_          VARCHAR2(5);
+   attr_              VARCHAR2(500);
+   
+   CURSOR get_product_items IS
+        select handling_unit_id, source_part_no, source_part_description, quantity, source_unit_meas, inventory_part_no,
+            source_ref1, source_ref2, source_ref3, source_ref4,
+            Inventory_Part_Cost_API.Get_Part_Cost(contract, inventory_part_no)*Sales_Part_API.Get_Conv_Factor(contract, source_part_no) unit_cost,
+            Customer_Order_Line_API.Get_Sale_Unit_Price(source_ref1, source_ref2, source_ref3, source_ref4) unit_price,
+            Customer_Order_API.Get_Currency_Code(source_ref1) sales_currency_code,
+            Company_Finance_API.Get_Currency_Code(company_) cost_currency_code,
+            Inventory_Part_API.Get_Prime_Commodity(contract, inventory_part_no) commodity
+        from shipment_line_handl_unit_res 
+        where ((shipment_id = shipment_id_ and (handling_unit_id = top_handling_unit_id_ or handling_unit_id in (
+                                                         select handling_unit_id 
+                                                         from shpmnt_handl_unit_with_history 
+                                                         connect by prior handling_unit_id = parent_handling_unit_id and shipment_id = shipment_id_ 
+                                                         start with handling_unit_id = top_handling_unit_id_ and shipment_id = shipment_id_)))) 
+        order by handling_unit_id;     
+BEGIN
+   contract_ := Shipment_API.Get_Contract(shipment_id_);
+   company_ := Site_API.Get_Company(contract_);
+   cost_rounding_ := Nvl(Currency_Code_API.Get_Currency_Rounding(company_, Company_Finance_API.Get_Currency_Code(company_)), 2);
+   price_rounding_ := Nvl(Currency_Code_API.Get_Currency_Rounding(company_, Customer_Order_API.Get_Currency_Code(Shipment_API.Get_Source_Ref1(shipment_id_))), 2);
+   
+   FOR rec_ IN get_product_items LOOP
+      return_arr_.extend;       
+      return_arr_(return_arr_.last).number := rec_.source_part_no;
+      return_arr_(return_arr_.last).description := rec_.source_part_description;
+      return_arr_(return_arr_.last).commodity_name := rec_.commodity;
+      --return_arr_(return_arr_.last).pack_ui_rmng_item := 'N';
+      return_arr_(return_arr_.last).quantity.units := rec_.source_unit_meas;
+      return_arr_(return_arr_.last).quantity.value := rec_.quantity;
+      return_arr_(return_arr_.last).cost.currency := rec_.cost_currency_code ;
+      return_arr_(return_arr_.last).cost.amount := round(rec_.unit_cost, cost_rounding_);
+      return_arr_(return_arr_.last).price.currency := rec_.sales_currency_code;
+      return_arr_(return_arr_.last).price.amount := round(rec_.unit_price, price_rounding_);  
+      return_arr_(return_arr_.last).auto_pack := 'false';
+      
+      Client_SYS.Clear_Attr(attr_);   
+      Client_SYS.Add_To_Attr('ORDER_NO', rec_.source_ref1, attr_);
+      Client_SYS.Add_To_Attr('LINE_NO', rec_.source_ref2, attr_);
+      Client_SYS.Add_To_Attr('REL_NO', rec_.source_ref3, attr_);
+      Client_SYS.Add_To_Attr('LINE_ITEM_NO', rec_.source_ref4, attr_);
+      Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+      Client_SYS.Add_To_Attr('CATALOG_NO', rec_.source_part_no, attr_);
+      Client_SYS.Add_To_Attr('PART_NO', rec_.inventory_part_no, attr_); 
+      
+      return_arr_(return_arr_.last).product_detail_map_tags := Get_Map_Tags_Arr(freight_provider_,
+                                                                                Frt_Message_Level_API.DB_LINE_ITEM,
+                                                                                Frt_Map_Tag_Type_API.DB_PRODUCT_DETAIL_TAG,
+                                                                                Frt_Source_Ref_Type_API.DB_SHIPMENT,
+                                                                                to_char(shipment_id_),
+                                                                                attr_);
+                                                           
+      return_arr_(return_arr_.last).custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+   END LOOP;
+   RETURN return_arr_;                                              
+END Get_Product_Details_Arr;
+
+FUNCTION Get_Order_Prod_Details_Arr (
+   freight_provider_ IN VARCHAR2,
+   order_no_         IN VARCHAR2) RETURN Sp_Product_Details_Arr
+IS   
+   return_arr_ Sp_Product_Details_Arr := Sp_Product_Details_Arr();
+   CURSOR get_items IS
+         SELECT line_no, rel_no, line_item_no
+         FROM customer_order_line_tab
+         WHERE order_no = order_no_;
+BEGIN
+   FOR rec_ IN get_items LOOP
+      return_arr_.extend;
+      return_arr_(return_arr_.last) := Get_Order_Prod_Details_Rec(freight_provider_, order_no_, rec_.line_no,  rec_.rel_no,  rec_.line_item_no);
+   END LOOP;
+   RETURN return_arr_;                    
+END Get_Order_Prod_Details_Arr;
+
+FUNCTION Get_Quote_Prod_Details_Arr (
+   freight_provider_ IN VARCHAR2,
+   quotation_no_     IN VARCHAR2) RETURN Sp_Product_Details_Arr
+IS
+   
+   return_arr_  Sp_Product_Details_Arr := Sp_Product_Details_Arr();
+   CURSOR get_items IS
+         SELECT line_no, rel_no, line_item_no
+         FROM order_quotation_line_tab
+         WHERE quotation_no = quotation_no_;
+BEGIN
+   FOR rec_ IN get_items LOOP
+      return_arr_.extend;
+      return_arr_(return_arr_.last) := Get_Quote_Prod_Details_Rec(freight_provider_, quotation_no_, rec_.line_no,  rec_.rel_no,  rec_.line_item_no);
+   END LOOP;
+   RETURN return_arr_;                        
+END Get_Quote_Prod_Details_Arr;
+
+FUNCTION Get_Ship_Ord_Prod_Details_Arr (
+   freight_provider_ IN VARCHAR2,
+   ship_order_id_    IN NUMBER) RETURN Sp_Product_Details_Arr
+IS
+   return_arr_ Sp_Product_Details_Arr := Sp_Product_Details_Arr();
+   CURSOR get_items IS
+         SELECT line_no
+         FROM shipment_order_line_tab
+         WHERE shipment_order_id = ship_order_id_;
+BEGIN
+   FOR rec_ IN get_items LOOP
+      return_arr_.extend;
+      return_arr_(return_arr_.last) := Get_Ship_Ord_Prod_Details_Rec(freight_provider_, ship_order_id_, rec_.line_no);
+   END LOOP;
+   RETURN return_arr_;                         
+END Get_Ship_Ord_Prod_Details_Arr;
+
+FUNCTION Get_Product_Details_Rec (
+   freight_provider_ IN VARCHAR2,
+   shipment_id_      IN NUMBER,
+   handling_unit_id_ IN NUMBER) RETURN Sp_Product_Details_Rec
+IS
+   attr_       VARCHAR2(500);
+   contract_   VARCHAR2(5);
+   return_rec_ Sp_Product_Details_Rec;
+   
+   CURSOR get_attributes IS
+          SELECT source_part_no, source_part_description, source_unit_meas, quantity,
+            source_ref1, source_ref2, source_ref3, source_ref4,
+            Customer_Order_Line_API.Get_Cost(source_ref1, source_ref2, source_ref3, source_ref4) unit_cost,
+            Customer_Order_Line_API.Get_Sale_Unit_Price(source_ref1, source_ref2, source_ref3, source_ref4) unit_price,
+            Customer_Order_API.Get_Currency_Code(source_ref1) sales_currency_code,
+            Company_Finance_API.Get_Currency_Code(Site_API.Get_Company(contract)) cost_currency_code,
+            Inventory_Part_API.Get_Prime_Commodity(contract, source_part_no) commodity
+            FROM shipment_line_handl_unit_join
+          WHERE shipment_id = shipment_id_
+          AND handling_unit_id = handling_unit_id_;
+   attribute_rec_               get_attributes%ROWTYPE;
+BEGIN
+   OPEN get_attributes;
+   FETCH get_attributes INTO attribute_rec_;
+   CLOSE get_attributes;
+   
+   return_rec_.number := attribute_rec_.source_part_no;
+   return_rec_.description := attribute_rec_.source_part_description;
+   return_rec_.commodity_name := attribute_rec_.commodity;
+   --return_rec_.pack_ui_rmng_item := 'N';
+   return_rec_.quantity.units := attribute_rec_.source_unit_meas;
+   return_rec_.quantity.value := attribute_rec_.quantity;
+   return_rec_.cost.currency := attribute_rec_.cost_currency_code;
+   return_rec_.cost.amount := attribute_rec_.unit_cost;
+   return_rec_.price.currency := attribute_rec_.sales_currency_code;
+   return_rec_.price.amount := attribute_rec_.unit_price;  
+   return_rec_.auto_pack := 'false';
+   
+   contract_ := Shipment_API.Get_Contract(shipment_id_);
+   Client_SYS.Clear_Attr(attr_);   
+   Client_SYS.Add_To_Attr('ORDER_NO', attribute_rec_.source_ref1, attr_);
+   Client_SYS.Add_To_Attr('LINE_NO', attribute_rec_.source_ref2, attr_);
+   Client_SYS.Add_To_Attr('REL_NO', attribute_rec_.source_ref3, attr_);
+   Client_SYS.Add_To_Attr('LINE_ITEM_NO', attribute_rec_.source_ref4, attr_);
+   Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+   Client_SYS.Add_To_Attr('CATALOG_NO', attribute_rec_.source_part_no, attr_);
+   Client_SYS.Add_To_Attr('PART_NO', Sales_Part_API.Get_Part_No(contract_, attribute_rec_.source_part_no), attr_);                                                  
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+   return_rec_.dimensions := Get_Product_Dimensions_Rec(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT, to_char(shipment_id_), attr_);
+   
+   RETURN return_rec_;                                          
+END Get_Product_Details_Rec;
+
+FUNCTION Get_Order_Prod_Details_Rec (
+   freight_provider_ IN VARCHAR2,
+   order_no_         IN VARCHAR2,
+   line_no_          IN VARCHAR2,
+   rel_no_           IN VARCHAR2,
+   line_item_no_     IN NUMBER) RETURN Sp_Product_Details_Rec
+IS  
+   return_rec_         Sp_Product_Details_Rec;
+   currency_code_      customer_order_tab.currency_code%TYPE;
+   contract_           customer_order_tab.contract%TYPE;
+   cost_currency_code_ customer_order_tab.currency_code%TYPE;
+   attr_               VARCHAR2(500);
+   
+   CURSOR get_items IS
+         SELECT catalog_no, catalog_desc, part_no, buy_qty_due, sales_unit_meas, 
+                sale_unit_price, cost, Sales_Part_API.Get_Gross_Weight(contract_,catalog_no) weight,
+                Inventory_Part_API.Get_Prime_Commodity(contract_, part_no) commodity
+         FROM customer_order_line_tab t
+         WHERE order_no = order_no_
+         AND line_no = line_no_
+         AND rel_no = rel_no_
+         AND line_item_no = line_item_no_;
+   
+   attribute_rec_               get_items%ROWTYPE;
+BEGIN
+   currency_code_ := Customer_Order_API.Get_Currency_Code(order_no_); 
+   contract_ := Customer_Order_API.Get_Contract(order_no_);
+   cost_currency_code_ := Company_Finance_API.Get_Currency_Code(Site_API.Get_Company(contract_));   
+   
+   OPEN get_items;
+   FETCH get_items INTO attribute_rec_;
+   CLOSE get_items;
+   
+   return_rec_.number := attribute_rec_.catalog_no;
+   return_rec_.description := attribute_rec_.catalog_desc;
+   return_rec_.commodity_name := attribute_rec_.commodity;
+   return_rec_.quantity.units := attribute_rec_.sales_unit_meas;
+   return_rec_.quantity.value := to_char(attribute_rec_.buy_qty_due);
+   return_rec_.cost.currency := cost_currency_code_;
+   return_rec_.cost.amount := to_char(attribute_rec_.cost);
+   return_rec_.price.currency := currency_code_;
+   return_rec_.price.amount := to_char(attribute_rec_.sale_unit_price);
+   return_rec_.weight := to_char(attribute_rec_.weight);
+   return_rec_.auto_pack := 'true';
+   --return_rec_.pack_ui_rmng_item := 'Y';
+   
+   Client_SYS.Clear_Attr(attr_);   
+   Client_SYS.Add_To_Attr('ORDER_NO', order_no_, attr_);
+   Client_SYS.Add_To_Attr('LINE_NO', line_no_, attr_);
+   Client_SYS.Add_To_Attr('REL_NO', rel_no_, attr_);
+   Client_SYS.Add_To_Attr('LINE_ITEM_NO', line_item_no_, attr_);
+   Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+   Client_SYS.Add_To_Attr('CATALOG_NO', attribute_rec_.catalog_no, attr_);
+   Client_SYS.Add_To_Attr('PART_NO', Sales_Part_API.Get_Part_No(contract_, attribute_rec_.catalog_no), attr_);
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_, attr_);
+   return_rec_.dimensions := Get_Product_Dimensions_Rec(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER, order_no_, attr_);
+   
+   RETURN return_rec_;                                                      
+END Get_Order_Prod_Details_Rec;
+
+FUNCTION Get_Quote_Prod_Details_Rec (
+   freight_provider_ IN VARCHAR2,
+   quotation_no_     IN VARCHAR2,
+   line_no_          IN VARCHAR2,
+   rel_no_           IN VARCHAR2,
+   line_item_no_     IN NUMBER) RETURN Sp_Product_Details_Rec
+IS
+   return_rec_         Sp_Product_Details_Rec;
+   currency_code_      customer_order_tab.currency_code%TYPE;
+   contract_           customer_order_tab.contract%TYPE;
+   cost_currency_code_ customer_order_tab.currency_code%TYPE;
+   attr_               VARCHAR2(500);
+   
+   CURSOR get_items IS
+         SELECT catalog_no, catalog_desc, part_no, buy_qty_due, 
+                sales_unit_measure, sale_unit_price, cost,
+                Sales_Part_API.Get_Gross_Weight(contract_,catalog_no) weight,
+                Inventory_Part_API.Get_Prime_Commodity(contract_, part_no) commodity
+         FROM order_quotation_line_tab t
+         WHERE quotation_no = quotation_no_
+         AND line_no = line_no_
+         AND rel_no = rel_no_
+         AND line_item_no = line_item_no_;
+   
+   attribute_rec_               get_items%ROWTYPE;
+BEGIN
+   currency_code_ := Order_Quotation_API.Get_Currency_Code(quotation_no_); 
+   contract_ := Order_Quotation_API.Get_Contract(quotation_no_);
+   cost_currency_code_ := Company_Finance_API.Get_Currency_Code(Site_API.Get_Company(contract_));   
+   
+   OPEN get_items;
+   FETCH get_items INTO attribute_rec_;
+   CLOSE get_items;
+   
+   return_rec_.number := attribute_rec_.catalog_no;
+   return_rec_.description := attribute_rec_.catalog_desc;
+   return_rec_.commodity_name := attribute_rec_.commodity;
+   return_rec_.quantity.units := attribute_rec_.sales_unit_measure;
+   return_rec_.quantity.value := to_char(attribute_rec_.buy_qty_due);
+   return_rec_.cost.currency := cost_currency_code_;
+   return_rec_.cost.amount := to_char(attribute_rec_.cost);
+   return_rec_.price.currency := currency_code_;
+   return_rec_.price.amount := to_char(attribute_rec_.sale_unit_price);
+   return_rec_.weight := to_char(attribute_rec_.weight);
+   return_rec_.auto_pack := 'true';
+   --return_rec_.pack_ui_rmng_item := 'Y';
+   
+   Client_SYS.Clear_Attr(attr_);   
+   Client_SYS.Add_To_Attr('QUOTATION_NO', quotation_no_, attr_);
+   Client_SYS.Add_To_Attr('LINE_NO', line_no_, attr_);
+   Client_SYS.Add_To_Attr('REL_NO', rel_no_, attr_);
+   Client_SYS.Add_To_Attr('LINE_ITEM_NO', line_item_no_, attr_);
+   Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+   Client_SYS.Add_To_Attr('CATALOG_NO', attribute_rec_.catalog_no, attr_);
+   Client_SYS.Add_To_Attr('PART_NO', Sales_Part_API.Get_Part_No(contract_, attribute_rec_.catalog_no), attr_);
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_, attr_);
+   return_rec_.dimensions := Get_Product_Dimensions_Rec(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SALES_QUOTE, quotation_no_, attr_);
+   
+   RETURN return_rec_;                                                          
+END Get_Quote_Prod_Details_Rec;
+
+FUNCTION Get_Ship_Ord_Prod_Details_Rec (
+   freight_provider_ IN VARCHAR2,
+   ship_order_id_    IN NUMBER,
+   line_no_          IN NUMBER) RETURN Sp_Product_Details_Rec
+IS  
+   return_rec_         Sp_Product_Details_Rec;
+   currency_code_      customer_order_tab.currency_code%TYPE;
+   contract_           customer_order_tab.contract%TYPE;
+   cost_currency_code_ customer_order_tab.currency_code%TYPE;
+   attr_               VARCHAR2(500);
+   
+   CURSOR get_items IS
+         SELECT inventory_part_no part_no, source_part_description part_description, qty_to_ship, 
+                Inventory_Part_API.Get_Unit_Meas(contract, inventory_part_no) unit_meas, 
+                NULL sale_unit_price, Inventory_Part_Cost_API.Get_Part_Cost(contract, inventory_part_no) cost, 
+                Inventory_Part_API.Get_Weight_Net(contract, inventory_part_no) weight,
+                Inventory_Part_API.Get_Prime_Commodity(contract, inventory_part_no) commodity
+         FROM shipment_order_line_tab t
+         WHERE shipment_order_id = ship_order_id_
+         AND line_no = line_no_;
+   
+   attribute_rec_               get_items%ROWTYPE;
+BEGIN
+   contract_ := Shipment_Order_API.Get_Sender_Contract(ship_order_id_);
+   cost_currency_code_ := Company_Finance_API.Get_Currency_Code(Site_API.Get_Company(contract_));   
+   
+   OPEN get_items;
+   FETCH get_items INTO attribute_rec_;
+   CLOSE get_items;
+   
+   return_rec_.number := attribute_rec_.part_no;
+   return_rec_.description := attribute_rec_.part_description;
+   return_rec_.commodity_name := attribute_rec_.commodity;
+   return_rec_.quantity.units := attribute_rec_.unit_meas;
+   return_rec_.quantity.value := to_char(attribute_rec_.qty_to_ship);
+   return_rec_.cost.currency := cost_currency_code_;
+   return_rec_.cost.amount := to_char(attribute_rec_.cost);
+   return_rec_.price.currency := currency_code_;
+   return_rec_.price.amount := NULL;
+   return_rec_.weight := to_char(attribute_rec_.weight);
+   return_rec_.auto_pack := 'true';
+   --return_rec_.pack_ui_rmng_item := 'Y';
+   
+   Client_SYS.Clear_Attr(attr_);   
+   Client_SYS.Add_To_Attr('SHIPMENT_ORDER_ID', ship_order_id_, attr_);
+   Client_SYS.Add_To_Attr('LINE_NO', line_no_, attr_);
+   Client_SYS.Add_To_Attr('CONTRACT', contract_, attr_);
+   Client_SYS.Add_To_Attr('PART_NO', attribute_rec_.part_no, attr_);
+   return_rec_.custom_fields := Get_Custom_Fields_Arr(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, ship_order_id_, attr_);
+   return_rec_.dimensions := Get_Product_Dimensions_Rec(freight_provider_, Frt_Message_Level_API.DB_LINE_ITEM, Frt_Source_Ref_Type_API.DB_SHIPMENT_ORDER, ship_order_id_, attr_);
+   
+   RETURN return_rec_;                                   
+END Get_Ship_Ord_Prod_Details_Rec;
+
+FUNCTION Get_Dimensions_Rec (
+   shipment_id_      IN NUMBER,
+   handling_unit_id_ IN NUMBER) RETURN Sp_Dimensions_Rec
+IS
+   return_rec_ Sp_Dimensions_Rec;
+   CURSOR get_attributes IS
+         SELECT  width, height, depth length, upper(uom_for_length) units
+         FROM handling_unit_shipment
+         WHERE shipment_id = shipment_id_
+         AND handling_unit_id = handling_unit_id_
+         AND structure_level = 1;
+   attribute_rec_               get_attributes%ROWTYPE;
+BEGIN
+   OPEN get_attributes;
+   FETCH get_attributes INTO attribute_rec_;
+   return_rec_.width := attribute_rec_.width;
+   return_rec_.height := attribute_rec_.height;
+   return_rec_.length := attribute_rec_.length;
+   return_rec_.units := attribute_rec_.units;
+   CLOSE get_attributes;
+   RETURN return_rec_;                       
+END Get_Dimensions_Rec;
+
+FUNCTION Get_Shipment_Message_Arr (
+   freight_provider_ IN VARCHAR2,
+   source_ref_type_  IN VARCHAR2,
+   source_ref_       IN VARCHAR2) RETURN Sp_Shipment_Message_Arr
+IS   
+   return_arr_    Sp_Shipment_Message_Arr := Sp_Shipment_Message_Arr();
+   mappings_arr_  Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr := Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr();
+   attr_          VARCHAR2(200);
+   lu_name_       VARCHAR2(100);
+   field_type_    VARCHAR2(20);
+   tag_value_     VARCHAR2(2000);
+BEGIN
+   mappings_arr_ := Frt_Provider_Mapping_API.Get_Frt_Provider_Mappings_Arr(
+                           freight_provider_, 
+                           Frt_Message_Level_API.Decode(Frt_Message_Level_API.DB_SHIPMENT), 
+                           Frt_Map_Tag_Type_API.DB_MESSAGE_LIST);
+   IF (mappings_arr_.COUNT > 0) THEN 
+      FOR i IN mappings_arr_.FIRST..mappings_arr_.LAST LOOP    
+         lu_name_ := Frt_Int_Utility_API.Get_Lu_By_Source_Field_Type(mappings_arr_(i).source_field_type, field_type_);
+         IF (lu_name_ IS NOT NULL AND source_ref_type_ = Frt_Source_Ref_Type_API.DB_SHIPMENT ) THEN 
+            IF (lu_name_ = 'Shipment') THEN 
+               Client_SYS.Add_To_Attr('SHIPMENT_ID', source_ref_, attr_);
+            ELSIF (lu_name_ = 'CustomerOrder') THEN 
+               Client_SYS.Add_To_Attr('ORDER_NO', Shipment_API.Get_Source_Ref1(source_ref_), attr_);
+            ELSIF (lu_name_ = 'FrtShippingInfo') THEN
+               Client_SYS.Add_To_Attr('SOURCE_REF', source_ref_, attr_);
+               Client_SYS.Add_To_Attr('SOURCE_REF_TYPE', Frt_Source_Ref_Type_API.Decode(source_ref_type_), attr_);
+            END IF;
+
+            IF (field_type_ = 'CORE') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'CUST') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Custom_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            END IF;
+            IF (mappings_arr_(i).map_tag_name IS NOT NULL AND tag_value_ IS NOT NULL) THEN 
+               return_arr_.extend;
+               return_arr_(return_arr_.last).name := mappings_arr_(i).map_tag_name;
+               return_arr_(return_arr_.last).value := tag_value_;
+            END IF;
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN return_arr_;                                        
+END Get_Shipment_Message_Arr;
+
+PROCEDURE Get_Shipment_User_Fields(
+   freight_provider_ IN            VARCHAR2,
+   shipment_detail_  IN OUT NOCOPY Sp_Shipment_Detail_Rec,
+   message_level_db_ IN            VARCHAR2,
+   source_ref_type_  IN            VARCHAR2,
+   source_ref_       IN            VARCHAR2)
+IS
+   mappings_arr_  Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr := Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr();
+   attr_          VARCHAR2(200);
+   lu_name_       VARCHAR2(100);
+   field_type_    VARCHAR2(20);
+   tag_value_     VARCHAR2(2000);
+   
+   CURSOR get_key_cols IS
+         SELECT column_name
+         FROM   dictionary_sys_view_column
+         WHERE  view_name = Dictionary_SYS.Get_Base_View(lu_name_)
+         AND    type_flag IN ('P', 'K')
+         ORDER BY column_index;
+BEGIN
+   mappings_arr_ := Frt_Provider_Mapping_API.Get_Frt_Provider_Mappings_Arr(
+                                 freight_provider_, 
+                                 Frt_Message_Level_API.Decode(message_level_db_), 
+                                 Frt_Map_Tag_Type_API.DB_USER_FIELD);
+   IF (mappings_arr_.COUNT > 0) THEN 
+      FOR i IN mappings_arr_.FIRST..mappings_arr_.LAST LOOP    
+         lu_name_ := Frt_Int_Utility_API.Get_Lu_By_Source_Field_Type(mappings_arr_(i).source_field_type, field_type_);
+         IF (lu_name_ IS NOT NULL AND source_ref_type_ = Frt_Source_Ref_Type_API.DB_SHIPMENT) THEN 
+            IF (lu_name_ = 'Shipment' AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+               Client_SYS.Add_To_Attr('SHIPMENT_ID', source_ref_, attr_);
+            ELSIF (lu_name_ = 'CustomerOrder'  AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+               Client_SYS.Add_To_Attr('ORDER_NO', Shipment_API.Get_Source_Ref1(source_ref_), attr_);
+            END IF;
+            
+            IF (field_type_ = 'CORE') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'CUST') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Custom_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            END IF;
+            IF (mappings_arr_(i).map_tag_name IS NOT NULL AND tag_value_ IS NOT NULL) THEN 
+               IF (mappings_arr_(i).map_tag_name = 'UserField1') THEN
+                  shipment_detail_.user_field1 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField2') THEN
+                  shipment_detail_.user_field2 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField3') THEN
+                  shipment_detail_.user_field3 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField4') THEN
+                  shipment_detail_.user_field4 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField5') THEN
+                  shipment_detail_.user_field5 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField6') THEN
+                  shipment_detail_.user_field6 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField7') THEN
+                  shipment_detail_.user_field7 := tag_value_;
+               END IF;
+            END IF;
+         END IF;
+      END LOOP;
+   END IF;
+END Get_Shipment_User_Fields;
+
+PROCEDURE Get_Package_User_Fields(
+   freight_provider_ IN            VARCHAR2,
+   package_details_  IN OUT NOCOPY Sp_Package_Details_Rec,  
+   message_level_db_ IN            VARCHAR2,
+   source_ref_type_  IN            VARCHAR2,
+   source_ref_       IN            VARCHAR2,
+   key_attr_         IN            VARCHAR2 DEFAULT NULL)
+IS
+   mappings_arr_  Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr := Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr();
+   lu_name_       VARCHAR2(100);
+   field_type_    VARCHAR2(20);
+   tag_value_     VARCHAR2(2000);
+   
+   CURSOR get_key_cols IS
+         SELECT column_name
+         FROM   dictionary_sys_view_column
+         WHERE  view_name = Dictionary_SYS.Get_Base_View(lu_name_)
+         AND    type_flag IN ('P', 'K')
+         ORDER BY column_index;
+BEGIN
+   mappings_arr_ := Frt_Provider_Mapping_API.Get_Frt_Provider_Mappings_Arr(
+                              freight_provider_, 
+                              Frt_Message_Level_API.Decode(message_level_db_), 
+                              Frt_Map_Tag_Type_API.DB_USER_FIELD);
+   IF (mappings_arr_.COUNT > 0) THEN 
+      FOR i IN mappings_arr_.FIRST..mappings_arr_.LAST LOOP    
+         lu_name_ := Frt_Int_Utility_API.Get_Lu_By_Source_Field_Type(mappings_arr_(i).source_field_type, field_type_);
+         IF (lu_name_ IS NOT NULL AND source_ref_type_ = Frt_Source_Ref_Type_API.DB_SHIPMENT) THEN 
+            IF (field_type_ = 'CORE') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Field_Value(lu_name_, mappings_arr_(i).source_field_name, key_attr_);
+            ELSIF (field_type_ = 'CUST') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Custom_Field_Value(lu_name_, mappings_arr_(i).source_field_name, key_attr_);
+            END IF;
+            IF (mappings_arr_(i).map_tag_name IS NOT NULL AND tag_value_ IS NOT NULL) THEN 
+               IF (mappings_arr_(i).map_tag_name = 'UserField1') THEN
+                  package_details_.user_field1 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField2') THEN
+                  package_details_.user_field2 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField3') THEN
+                  package_details_.user_field3 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField4') THEN
+                  package_details_.user_field4 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField5') THEN
+                  package_details_.user_field5 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField6') THEN
+                  package_details_.user_field6 := tag_value_;
+               ELSIF (mappings_arr_(i).map_tag_name = 'UserField7') THEN
+                  package_details_.user_field7 := tag_value_;
+               END IF;
+            END IF;
+         END IF;
+      END LOOP;
+   END IF;                                                                                             
+END Get_Package_User_Fields;
+
+FUNCTION Get_Custom_Fields_Arr (
+   freight_provider_ IN VARCHAR2,
+   message_level_db_ IN VARCHAR2,
+   source_ref_type_  IN VARCHAR2,
+   source_ref_       IN VARCHAR2,
+   key_attr_         IN VARCHAR2 DEFAULT NULL) RETURN Sp_Custom_Fields_Arr
+IS
+   return_arr_    Sp_Custom_Fields_Arr := Sp_Custom_Fields_Arr();
+   mappings_arr_  Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr := Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr();
+   attr_          VARCHAR2(200);
+   lu_name_       VARCHAR2(100);
+   field_type_    VARCHAR2(20);
+   tag_value_     VARCHAR2(2000);
+   contract_      inventory_part.contract%TYPE;
+   part_no_       inventory_part.part_no%TYPE;
+   catalog_no_    sales_part.catalog_no%TYPE;
+   char_code_     inventory_part_char.characteristic_code%TYPE;   
+   
+   CURSOR get_sales_part_char(char_code_ IN VARCHAR2) IS
+         select attr_value
+         FROM  sales_part_characteristic_tab
+         WHERE contract = contract_
+         AND   catalog_no = catalog_no_
+         AND   characteristic_code = char_code_;
+   
+   CURSOR get_key_cols IS
+         SELECT column_name
+         FROM   dictionary_sys_view_column
+         WHERE  view_name = Dictionary_SYS.Get_Base_View(lu_name_)
+         AND    type_flag IN ('P', 'K')
+         ORDER BY column_index;
+BEGIN
+   mappings_arr_ := Frt_Provider_Mapping_API.Get_Frt_Provider_Mappings_Arr(
+                              freight_provider_, 
+                              Frt_Message_Level_API.Decode(message_level_db_), 
+                              Frt_Map_Tag_Type_API.DB_CUSTOM_FIELD);
+   IF (mappings_arr_.COUNT > 0) THEN 
+      FOR i IN mappings_arr_.FIRST..mappings_arr_.LAST LOOP    
+         lu_name_ := Frt_Int_Utility_API.Get_Lu_By_Source_Field_Type(mappings_arr_(i).source_field_type, field_type_);  
+         Client_SYS.Clear_Attr(attr_);
+         IF (lu_name_ IS NOT NULL) THEN 
+            IF (source_ref_type_ = Frt_Source_Ref_Type_API.DB_SHIPMENT) THEN 
+               IF (lu_name_ = 'Shipment' AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+                  Client_SYS.Add_To_Attr('SHIPMENT_ID', source_ref_, attr_);
+               ELSIF (lu_name_ = 'CustomerOrder'  AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+                  Client_SYS.Add_To_Attr('ORDER_NO', Shipment_API.Get_Source_Ref1(source_ref_), attr_);
+               ELSIF (lu_name_ = 'HandlingUnit'  AND message_level_db_ = Frt_Message_Level_API.DB_HANDLING_UNIT) THEN 
+                  attr_ := key_attr_;            
+               ELSIF (message_level_db_ = Frt_Message_Level_API.DB_LINE_ITEM) THEN 
+                  IF (lu_name_ = 'CustomerOrderLine') THEN 
+                     Client_SYS.Add_To_Attr('ORDER_NO', Client_SYS.Get_Item_Value('ORDER_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('LINE_NO', Client_SYS.Get_Item_Value('LINE_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('RELEASE_NO', Client_SYS.Get_Item_Value('REL_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('LINE_ITEM_NO', Client_SYS.Get_Item_Value('LINE_ITEM_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('CATALOG_NO', Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPartCharacteristic') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     catalog_no_ := Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_);
+                  ELSIF (lu_name_ = 'InventoryPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'InventoryPartChar') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     part_no_ := Client_SYS.Get_Item_Value('PART_NO', key_attr_);
+                  ELSIF (lu_name_ = 'PartCatalog') THEN 
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  END IF;
+               END IF;                        
+            ELSE
+               IF (message_level_db_ = Frt_Message_Level_API.DB_LINE_ITEM) THEN 
+                  IF (lu_name_ = 'SalesPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('CATALOG_NO', Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPartCharacteristic') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     catalog_no_ := Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_);
+                  ELSIF (lu_name_ = 'InventoryPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'InventoryPartChar') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     part_no_ := Client_SYS.Get_Item_Value('PART_NO', key_attr_);
+                  ELSIF (lu_name_ = 'PartCatalog') THEN 
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  END IF;
+                  
+                  IF (source_ref_type_ = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER) THEN
+                     IF (lu_name_ = 'CustomerOrderLine') THEN 
+                        Client_SYS.Add_To_Attr('ORDER_NO', Client_SYS.Get_Item_Value('ORDER_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('LINE_NO', Client_SYS.Get_Item_Value('LINE_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('RELEASE_NO', Client_SYS.Get_Item_Value('REL_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('LINE_ITEM_NO', Client_SYS.Get_Item_Value('LINE_ITEM_NO', key_attr_), attr_);
+                     END IF;
+                  END IF;
+               ELSIF (message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT AND source_ref_type_ = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER) THEN 
+                  IF (lu_name_ = 'CustomerOrder') THEN 
+                     Client_SYS.Add_To_Attr('ORDER_NO', source_ref_, attr_);
+                  END IF;
+               END IF;
+            END IF;
+            
+            IF (field_type_ = 'CORE') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'CUST') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Custom_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'INVCHAR') THEN 
+               char_code_ := mappings_arr_(i).source_field_name;
+               tag_value_ := Inventory_Part_Char_API.Get_Attr_Value(contract_, part_no_, char_code_);
+            ELSIF (field_type_ = 'SALECHAR') THEN 
+               char_code_ := mappings_arr_(i).source_field_name;
+               OPEN get_sales_part_char(char_code_);
+               FETCH get_sales_part_char INTO tag_value_;
+               CLOSE get_sales_part_char;
+            END IF;
+            
+            IF (mappings_arr_(i).map_tag_name IS NOT NULL AND tag_value_ IS NOT NULL) THEN 
+               return_arr_.extend;
+               return_arr_(return_arr_.last).name := mappings_arr_(i).map_tag_name;
+               IF (mappings_arr_(i).map_tag_name = 'ItemVolumeUnit') THEN 
+                  tag_value_ := UPPER(tag_value_);
+               END IF;
+               return_arr_(return_arr_.last).value := tag_value_;
+            END IF;
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN return_arr_;                                                                      
+END Get_Custom_Fields_Arr;
+
+-- Copy of Get_Custom_Fields_Arr - Used to retrieve mappings for additional tags at SAME LEVEL
+-- as JSON under construction. Can be used for tags without hardcoded mapping, or to override harcoded mapping.
+FUNCTION Get_Map_Tags_Arr (
+   freight_provider_ IN VARCHAR2,
+   message_level_db_ IN VARCHAR2,
+   map_tag_type_db_  IN VARCHAR2,
+   source_ref_type_  IN VARCHAR2,
+   source_ref_       IN VARCHAR2,
+   key_attr_         IN VARCHAR2 DEFAULT NULL) RETURN Sp_Map_Tags_Arr
+IS
+   return_arr_    Sp_Map_Tags_Arr := Sp_Map_Tags_Arr();
+   mappings_arr_  Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr := Frt_Provider_Mapping_API.Frt_Provider_Mappings_Arr();
+   attr_          VARCHAR2(200);
+   lu_name_       VARCHAR2(100);
+   field_type_    VARCHAR2(20);
+   tag_value_     VARCHAR2(2000);
+   contract_      inventory_part.contract%TYPE;
+   part_no_       inventory_part.part_no%TYPE;
+   catalog_no_    sales_part.catalog_no%TYPE;
+   char_code_     inventory_part_char.characteristic_code%TYPE;   
+   
+   CURSOR get_sales_part_char(char_code_ IN VARCHAR2) IS
+         select attr_value
+         FROM  sales_part_characteristic_tab
+         WHERE contract = contract_
+         AND   catalog_no = catalog_no_
+         AND   characteristic_code = char_code_;
+   
+   CURSOR get_key_cols IS
+         SELECT column_name
+         FROM   dictionary_sys_view_column
+         WHERE  view_name = Dictionary_SYS.Get_Base_View(lu_name_)
+         AND    type_flag IN ('P', 'K')
+         ORDER BY column_index;
+BEGIN
+   mappings_arr_ := Frt_Provider_Mapping_API.Get_Frt_Provider_Mappings_Arr(
+                              freight_provider_, 
+                              Frt_Message_Level_API.Decode(message_level_db_), 
+                              map_tag_type_db_);
+   IF (mappings_arr_.COUNT > 0) THEN 
+      FOR i IN mappings_arr_.FIRST..mappings_arr_.LAST LOOP    
+         lu_name_ := Frt_Int_Utility_API.Get_Lu_By_Source_Field_Type(mappings_arr_(i).source_field_type, field_type_);  
+         Client_SYS.Clear_Attr(attr_);
+         IF (lu_name_ IS NOT NULL) THEN 
+            IF (source_ref_type_ = Frt_Source_Ref_Type_API.DB_SHIPMENT) THEN 
+               IF (lu_name_ = 'Shipment' AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+                  Client_SYS.Add_To_Attr('SHIPMENT_ID', source_ref_, attr_);
+               ELSIF (lu_name_ = 'CustomerOrder'  AND message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT) THEN 
+                  Client_SYS.Add_To_Attr('ORDER_NO', Shipment_API.Get_Source_Ref1(source_ref_), attr_);
+               ELSIF (lu_name_ = 'HandlingUnit'  AND message_level_db_ = Frt_Message_Level_API.DB_HANDLING_UNIT) THEN 
+                  attr_ := key_attr_;            
+               ELSIF (message_level_db_ = Frt_Message_Level_API.DB_LINE_ITEM) THEN 
+                  IF (lu_name_ = 'CustomerOrderLine') THEN 
+                     Client_SYS.Add_To_Attr('ORDER_NO', Client_SYS.Get_Item_Value('ORDER_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('LINE_NO', Client_SYS.Get_Item_Value('LINE_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('RELEASE_NO', Client_SYS.Get_Item_Value('REL_NO', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('LINE_ITEM_NO', Client_SYS.Get_Item_Value('LINE_ITEM_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('CATALOG_NO', Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPartCharacteristic') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     catalog_no_ := Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_);
+                  ELSIF (lu_name_ = 'InventoryPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'InventoryPartChar') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     part_no_ := Client_SYS.Get_Item_Value('PART_NO', key_attr_);
+                  ELSIF (lu_name_ = 'PartCatalog') THEN 
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  END IF;
+               END IF;                        
+            ELSE
+               IF (message_level_db_ = Frt_Message_Level_API.DB_LINE_ITEM) THEN 
+                  IF (lu_name_ = 'SalesPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('CATALOG_NO', Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'SalesPartCharacteristic') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     catalog_no_ := Client_SYS.Get_Item_Value('CATALOG_NO', key_attr_);
+                  ELSIF (lu_name_ = 'InventoryPart') THEN 
+                     Client_SYS.Add_To_Attr('CONTRACT', Client_SYS.Get_Item_Value('CONTRACT', key_attr_), attr_);
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  ELSIF (lu_name_ = 'InventoryPartChar') THEN 
+                     contract_ := Client_SYS.Get_Item_Value('CONTRACT', key_attr_);
+                     part_no_ := Client_SYS.Get_Item_Value('PART_NO', key_attr_);
+                  ELSIF (lu_name_ = 'PartCatalog') THEN 
+                     Client_SYS.Add_To_Attr('PART_NO', Client_SYS.Get_Item_Value('PART_NO', key_attr_), attr_);
+                  END IF;
+                  
+                  IF (source_ref_type_ = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER) THEN
+                     IF (lu_name_ = 'CustomerOrderLine') THEN 
+                        Client_SYS.Add_To_Attr('ORDER_NO', Client_SYS.Get_Item_Value('ORDER_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('LINE_NO', Client_SYS.Get_Item_Value('LINE_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('RELEASE_NO', Client_SYS.Get_Item_Value('REL_NO', key_attr_), attr_);
+                        Client_SYS.Add_To_Attr('LINE_ITEM_NO', Client_SYS.Get_Item_Value('LINE_ITEM_NO', key_attr_), attr_);
+                     END IF;
+                  END IF;
+               ELSIF (message_level_db_ = Frt_Message_Level_API.DB_SHIPMENT AND source_ref_type_ = Frt_Source_Ref_Type_API.DB_CUSTOMER_ORDER) THEN 
+                  IF (lu_name_ = 'CustomerOrder') THEN 
+                     Client_SYS.Add_To_Attr('ORDER_NO', source_ref_, attr_);
+                  END IF;
+               END IF;
+            END IF;
+            
+            IF (field_type_ = 'CORE') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'CUST') THEN 
+               tag_value_ := Frt_Provider_Mapping_API.Get_Custom_Field_Value(lu_name_, mappings_arr_(i).source_field_name, attr_);
+            ELSIF (field_type_ = 'INVCHAR') THEN 
+               char_code_ := mappings_arr_(i).source_field_name;
+               tag_value_ := Inventory_Part_Char_API.Get_Attr_Value(contract_, part_no_, char_code_);
+            ELSIF (field_type_ = 'SALECHAR') THEN 
+               char_code_ := mappings_arr_(i).source_field_name;
+               OPEN get_sales_part_char(char_code_);
+               FETCH get_sales_part_char INTO tag_value_;
+               CLOSE get_sales_part_char;
+            END IF;
+
+            IF (mappings_arr_(i).map_tag_name IS NOT NULL AND tag_value_ IS NOT NULL) THEN 
+               return_arr_.extend;
+               return_arr_(return_arr_.last).name := mappings_arr_(i).map_tag_name;
+               return_arr_(return_arr_.last).value := tag_value_;
+            END IF;
+         END IF;
+      END LOOP;
+   END IF;
+   RETURN return_arr_;                                                                      
+END Get_Map_Tags_Arr;
+
+FUNCTION Get_Product_Dimensions_Rec (
+   fre
