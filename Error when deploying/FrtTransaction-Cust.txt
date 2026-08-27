@@ -1,0 +1,607 @@
+-----------------------------------------------------------------------------
+--
+--  Logical unit: FrtTransaction
+--  Component:    FRTINT
+--
+--  IFS Developer Studio Template Version 3.0
+--
+--  Date    Sign    History
+--  ------  ------  ---------------------------------------------------------
+--  240105  DIKUUS  Modified Process_To_Complete___() to properly check flag charges_created flag
+-----------------------------------------------------------------------------
+
+layer Cust;
+
+-------------------- PUBLIC DECLARATIONS ------------------------------------
+
+
+-------------------- PRIVATE DECLARATIONS -----------------------------------
+
+
+-------------------- LU SPECIFIC IMPLEMENTATION METHODS ---------------------
+
+PROCEDURE Do_Void___ (
+   rec_  IN OUT frt_transaction_tab%ROWTYPE,
+   attr_ IN OUT VARCHAR2 )
+IS
+   charges_removed_ VARCHAR2(5);
+   error_msg_ VARCHAR2(2000);
+   info_      VARCHAR2(32000);
+BEGIN
+   @ApproveTransactionStatement <DIKUUS 21-11-08>
+   SAVEPOINT check_void;
+  Frt_Charge_Util_API.Reverse_Freight_Charges(charges_removed_,error_msg_,rec_.source_ref, rec_.transaction_id);
+   -- Add code to remove or reverse charges if exists before void
+EXCEPTION 
+   WHEN OTHERS THEN 
+      error_msg_ := SQLERRM;
+      @ApproveTransactionStatement <DIKUUS 21-11-08> 
+      ROLLBACK TO SAVEPOINT check_void; 
+      Frt_Transaction_API.Set_Error_Message (rec_.source_ref_type, rec_.source_ref , rec_.freight_msg_type,error_msg_);   
+END Do_Void___;
+
+PROCEDURE Process_To_Complete___ (
+   rec_  IN OUT NOCOPY frt_transaction_tab%ROWTYPE,
+   attr_ IN OUT NOCOPY VARCHAR2 )
+IS
+   charges_created_ VARCHAR2(5);
+   error_msg_ VARCHAR2(2000);
+   info_      VARCHAR2(32000);
+   objid_ VARCHAR2(100);
+   objversion_ VARCHAR2(100);
+   attr1_ VARCHAR2(1000);
+   shipment_id_   NUMBER;
+   shipment_order_id_ NUMBER;
+   gross_operation_weight_ NUMBER;
+   uom_for_weight_ VARCHAR2(20);
+   contract_ VARCHAR2(25);
+   
+   
+   
+   -- 230307 jomuus (+/-) User allowed site not required START
+   CURSOR get_shipkeys IS 
+   SELECT ROWID objid, to_char(rowversion,'YYYYMMDDHH24MISS') objversion, contract
+   FROM shipment_tab
+   WHERE shipment_id =shipment_id_;
+   
+   CURSOR get_ship_order_keys IS 
+   SELECT ROWID objid, to_char(rowversion,'YYYYMMDDHH24MISS') objversion
+   FROM shipment_order_tab
+   WHERE shipment_order_id =shipment_order_id_;
+   -- 230307 jomuus (+/-) User allowed site not required FINISH
+   
+   --(+) 231214 DIKUUS START Get delivery terms code based on freight term code received from pacejet
+   curr_freight_terms_code_  VARCHAR2(100);
+   new_delivery_term_id_ VARCHAR2(40);
+   flag_  BOOLEAN := FALSE;
+   freight_provider_id_ VARCHAR2(40);
+   
+   CURSOR get_del_term (freight_provider_id_ IN VARCHAR2, freight_terms_code_ IN VARCHAR2  )IS 
+   SELECT delivery_terms_id 
+   FROM Frt_Delivery_Term 
+   WHERE freight_provider_id =  freight_provider_id_ 
+   AND freight_terms_code = freight_terms_code_ 
+   ORDER BY delivery_terms_id;
+   --(+) 231214 DIKUUS FINISH
+BEGIN
+   -- Set save point 
+   Trace_Sys.Message('>>Inside Process to complete-1');
+   @ApproveTransactionStatement <DIKUUS 21-11-08>
+   SAVEPOINT check_complete;
+   IF (rec_.freight_msg_type IN ( 'SHIPMENT','RATE') ) THEN
+      -- Update PRO No on shipment with Master Tracking no
+      IF (rec_.freight_msg_type ='SHIPMENT') THEN       
+         shipment_id_ := to_number(rec_.source_ref);
+         OPEN get_shipkeys;
+         FETCH get_shipkeys INTO objid_,objversion_,contract_;
+         CLOSE get_shipkeys;                 
+         uom_for_weight_ := Company_Invent_Info_API.Get_Uom_For_Weight(Site_API.get_company(contract_));
+         gross_operation_weight_ := Shipment_API.Get_Operational_Gross_Weight(shipment_id_, uom_for_weight_, 'FALSE');
+      END IF;
+      info_ :=NULL;  
+      Client_SYS.Clear_Attr(attr1_);
+      IF (rec_.master_tracking_no IS NOT NULL AND rec_.freight_msg_type ='SHIPMENT' ) THEN         
+         Client_SYS.Add_To_Attr('PRO_NO', rec_.master_tracking_no, attr1_);
+      END IF;
+      IF (gross_operation_weight_ != rec_.total_weight AND rec_.freight_msg_type ='SHIPMENT'  ) THEN          
+         Client_SYS.Add_To_Attr('MANUAL_GROSS_WEIGHT', rec_.total_weight, attr1_);
+      END IF;
+      Trace_Sys.Message('>>Inside Process to complete-1-1');
+      IF (Mpccom_Ship_Via_API.Exists(rec_.ship_via_code)) THEN
+         Client_SYS.Add_To_Attr('SHIP_VIA_CODE', rec_.ship_via_code, attr1_);  
+      ELSE
+         Error_SYS.Record_General(lu_name_, 'SHIPVIA1_ERR: Ship Via code :P1 received from provider does not exist in the application. Cannot process this freight transaction.',rec_.ship_via_code);         
+      END IF;
+      -- Check and compare freight terms code of current shipment with freight terms code received from Pacejet
+      -- if they are different, get delivery terms based on pacejet freigt terms code and 
+      IF (rec_.freight_term_code IS NOT NULL AND rec_.freight_msg_type ='SHIPMENT') THEN
+         curr_freight_terms_code_ := Frt_Shipping_Info_Util_API.Get_Freight_Terms_Code(rec_.freight_msg_type, rec_.source_ref);
+         IF (curr_freight_terms_code_ != rec_.freight_term_code ) THEN
+            -- Get Delivery terms based on freight terms code sent by pacejet. if not found error
+            freight_provider_id_ := Frt_Shipping_Info_Util_API.Get_Freight_Provider_Id(rec_.freight_msg_type, rec_.source_ref);
+            OPEN get_del_term (freight_provider_id_, rec_.freight_term_code  );
+            FETCH get_del_term INTO new_delivery_term_id_;
+            IF (get_del_term%FOUND) THEN 
+               flag_ := TRUE;
+            END IF;            
+            CLOSE get_del_term;
+            IF (flag_ ) THEN 
+               Client_SYS.Add_To_Attr('DELIVERY_TERMS', new_delivery_term_id_, attr1_);
+            ELSE
+               Error_SYS.Record_General(lu_name_, 'DEL_TERM_ERR: Freight Term code :P1 received from provider does not exist in Freight Delivery Terms. Cannot process this freight transaction.',rec_.freight_term_code); 
+            END IF;            
+         END IF;
+      END IF;
+      Trace_Sys.Message('>>Inside Process to complete-1-2');
+      -- 
+      IF (attr1_ IS NOT NULL AND rec_.freight_msg_type ='SHIPMENT' ) THEN
+         Shipment_API.Modify__(info_, objid_, objversion_, attr1_, 'DO');
+      END IF;  
+      Trace_Sys.Message('>>Inside Process to complete-1-3');
+      IF (attr1_ IS NOT NULL AND rec_.freight_msg_type ='RATE' AND rec_.source_ref_type = 'CUSTOMER_ORDER') THEN
+         Customer_Order_API.Modify(info_, attr1_, rec_.source_ref); 
+      END IF;
+      Trace_Sys.Message('>>Inside Process to complete-1-4');
+      IF (attr1_ IS NOT NULL AND rec_.freight_msg_type ='RATE' AND rec_.source_ref_type = 'SALES_QUOTE') THEN
+         Order_Quotation_API.Modify(info_, attr1_, rec_.source_ref); 
+      END IF;
+      IF (attr1_ IS NOT NULL AND rec_.freight_msg_type ='RATE' AND rec_.source_ref_type = 'SHIPMENT_ORDER') THEN
+         shipment_order_id_ := to_number(rec_.source_ref);
+         OPEN get_ship_order_keys;
+         FETCH get_ship_order_keys INTO objid_,objversion_;
+         CLOSE get_ship_order_keys;
+         Shipment_Order_API.Modify__(info_, objid_, objversion_, attr1_, 'DO');    
+      END IF;
+   END IF;
+    Trace_Sys.Message('>>Inside Process to complete-2');
+   IF (rec_.freight_msg_type = 'SHIPMENT') THEN
+      shipment_id_ := to_number(rec_.source_ref);
+      Frt_Charge_Util_API.Create_Freight_Charges(charges_created_,shipment_id_, rec_.transaction_id);
+   END IF;
+    Trace_Sys.Message('>>Inside Process to complete-3');
+   IF (rec_.freight_msg_type = 'RATE') THEN
+      Frt_Charge_Util_API.Create_Estimated_Charges(charges_created_,rec_.source_ref_type, rec_.source_ref, rec_.transaction_id);
+   END IF;
+ Trace_Sys.Message('>>Inside Process to complete-4');   
+   -- Update error and charge created    
+   -- Correction - charges_created_ either 'TRUE' or 'FALSE'     
+   IF (charges_created_ = 'TRUE' ) THEN    
+      Client_SYS.Clear_Attr(attr_);
+      Client_SYS.Add_To_Attr('ERROR_TEXT','', attr_);
+      Client_SYS.Add_To_Attr('CHARGE_CREATED','TRUE', attr_);
+      Modify(info_,attr_,rec_.source_ref_type, rec_.source_ref , rec_.freight_msg_type);
+   END IF;  
+    Trace_Sys.Message('>>Inside Process to complete-5');
+   -- Set complete
+   Frt_Transaction_API.Set_Completed(rec_.source_ref_type, rec_.source_ref , rec_.freight_msg_type);
+EXCEPTION 
+   WHEN OTHERS THEN 
+      error_msg_ := SQLERRM;
+       Trace_Sys.Message('>>Inside Process to complete-error. '||error_msg_);
+      @ApproveTransactionStatement <DIKUUS 21-11-08> 
+      ROLLBACK TO SAVEPOINT check_complete; 
+      Frt_Transaction_API.Set_Error_Message (rec_.source_ref_type, rec_.source_ref , rec_.freight_msg_type,error_msg_); 
+END Process_To_Complete___;
+
+-------------------- LU SPECIFIC PRIVATE METHODS ----------------------------
+
+
+-------------------- LU SPECIFIC PROTECTED METHODS --------------------------
+
+
+-------------------- LU SPECIFIC PUBLIC METHODS -----------------------------
+PROCEDURE Modify_Po_Accrual_Info (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2,
+   accrual_po_no_ IN VARCHAR2,
+   accrual_line_no_ IN VARCHAR2,
+   accrual_release_no_ IN VARCHAR2 )
+IS
+   oldrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   objid_         VARCHAR2(2000);
+   objversion_    VARCHAR2(2000);
+   attr_          VARCHAR2(2000);   
+   indrec_        Indicator_Rec;
+BEGIN
+    Get_Id_Version_By_Keys___ (objid_, objversion_ ,source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+    oldrec_ := Lock_By_Id___( objid_, objversion_);
+    Client_SYS.Clear_Attr(attr_);
+    Client_SYS.Add_To_Attr('ACCRUAL_PO_NO', accrual_po_no_, attr_);
+    Client_SYS.Add_To_Attr('ACCRUAL_LINE_NO', accrual_line_no_, attr_);
+    Client_SYS.Add_To_Attr('ACCRUAL_RELEASE_NO', accrual_release_no_, attr_);
+    newrec_ := oldrec_;
+    Unpack___(newrec_, indrec_, attr_);
+    Check_Update___(oldrec_, newrec_, indrec_, attr_);
+    Update___(objid_, oldrec_, newrec_, attr_, objversion_, TRUE);
+    
+END Modify_Po_Accrual_Info;
+
+PROCEDURE Modify_Provider_Url (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2,
+   provider_url_ IN VARCHAR2
+   )
+IS
+   oldrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   objid_         VARCHAR2(2000);
+   objversion_    VARCHAR2(2000);
+   attr_          VARCHAR2(2000);   
+   indrec_        Indicator_Rec;
+BEGIN
+    Get_Id_Version_By_Keys(objid_, objversion_ ,source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+    oldrec_ := Lock_By_Id___( objid_, objversion_);
+    Client_SYS.Clear_Attr(attr_);
+    Client_SYS.Add_To_Attr('PROVIDER_URL', provider_url_, attr_);    
+    newrec_ := oldrec_;
+    Unpack___(newrec_, indrec_, attr_);
+    Check_Update___(oldrec_, newrec_, indrec_, attr_);
+    Update___(objid_, oldrec_, newrec_, attr_, objversion_, TRUE);
+    
+END Modify_Provider_Url;
+
+PROCEDURE Set_Error_Message (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2,
+   error_message_ IN VARCHAR2
+   )
+IS
+   oldrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   objid_         VARCHAR2(2000);
+   objversion_    VARCHAR2(2000);
+   attr_          VARCHAR2(2000);   
+   indrec_        Indicator_Rec;
+   
+   msg_      VARCHAR2(2000);
+   fnd_user_ VARCHAR2(30);
+BEGIN
+   Get_Id_Version_By_Keys___ (objid_, objversion_ ,source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   oldrec_ := Lock_By_Id___( objid_, objversion_);
+   Client_SYS.Clear_Attr(attr_);
+   Client_SYS.Add_To_Attr('ERROR_TEXT', error_message_, attr_);    
+   newrec_ := oldrec_;
+   Unpack___(newrec_, indrec_, attr_);
+   Check_Update___(oldrec_, newrec_, indrec_, attr_);
+   Update___(objid_, oldrec_, newrec_, attr_, objversion_, TRUE);
+   
+   -- Can be used to set error text back to NULL - only trigger event if a non-null error
+   IF (error_message_ IS NOT NULL) AND (Event_SYS.Event_Enabled('FrtTransaction', 'FRTINT_PROCESS_ERROR')) THEN
+      
+      msg_ := Message_SYS.Construct('FRTINT_PROCESS_ERROR');
+      
+      -- Standard Event Parameters
+      fnd_user_ := Fnd_Session_API.Get_Fnd_User;
+      Message_SYS.Add_Attribute( msg_, 'EVENT_DATETIME', sysdate);  -- TBD Site_API.Get_Site_Date(contract_));
+      Message_SYS.Add_Attribute( msg_, 'USER_IDENTITY', fnd_user_);
+      Message_SYS.Add_Attribute( msg_, 'USER_DESCRIPTION', Fnd_User_API.Get_Description(fnd_user_));
+      Message_SYS.Add_Attribute( msg_, 'USER_MAIL_ADDRESS', Fnd_User_API.Get_Property(fnd_user_, 'SMTP_MAIL_ADDRESS'));
+      Message_SYS.Add_Attribute( msg_, 'USER_MOBILE_PHONE', Fnd_User_API.Get_Property(fnd_user_, 'MOBILE_PHONE'));
+      
+      -- Primary key for object
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF_TYPE_DB', newrec_.source_ref_type);
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF', newrec_.source_ref);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_MSG_TYPE_DB', newrec_.freight_msg_type);
+      
+      Message_SYS.Add_Attribute( msg_, 'TRANSACTION_ID', newrec_.transaction_id);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_PROVIDER_ID', newrec_.freight_provider_id);
+      Message_SYS.Add_Attribute( msg_, 'SHIP_VIA_CODE', newrec_.ship_via_code);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_ID', newrec_.carrier_id);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_SERVICE', newrec_.carrier_service);
+      Message_SYS.Add_Attribute( msg_, 'ERROR_TEXT', newrec_.error_text);
+      Message_SYS.Add_Attribute( msg_, 'OBJSTATE', newrec_.rowstate);
+      
+      Event_SYS.Event_Execute('FrtTransaction', 'FRTINT_PROCESS_ERROR', msg_);
+   END IF;
+END Set_Error_Message;
+
+
+FUNCTION Get_Source_Ref_By_Trans_Id (
+   transaction_id_ IN VARCHAR2, 
+   source_ref_type_db_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2) RETURN VARCHAR2
+IS
+   source_ref_ VARCHAR2(35);
+   
+   CURSOR get_source_ref IS
+   SELECT source_ref 
+   FROM FRT_TRANSACTION_TAB
+   WHERE source_ref_type = source_ref_type_db_
+   AND freight_msg_type = freight_msg_type_db_
+   AND transaction_id = transaction_id_;
+BEGIN
+	
+   OPEN get_source_ref;
+   FETCH get_source_ref INTO source_ref_;
+   CLOSE get_source_ref;
+   
+	RETURN source_ref_;
+   
+END Get_Source_Ref_By_Trans_Id;
+
+
+
+PROCEDURE Set_Pending (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   attr_       VARCHAR2(32000);
+   objid_      VARCHAR2(2000);
+   objversion_ VARCHAR2(2000);
+   state_      VARCHAR2(2000);
+   info_       VARCHAR2(32000);
+   old_info_   VARCHAR2(32000);
+   rec_    FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   msg_      VARCHAR2(2000);
+   fnd_user_ VARCHAR2(30);
+BEGIN
+   old_info_ := Client_SYS.Get_All_Info;   
+   Client_SYS.Clear_Attr(attr_);
+   state_ := rec_.rowstate;
+   Get_Id_Version_By_Keys___(objid_, objversion_, source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   rec_   := Lock_By_Id___(objid_, objversion_);
+   Set_Pending__(info_, objid_, objversion_, attr_, 'DO');
+   info_ := old_info_ || info_;
+   
+   IF (Event_SYS.Event_Enabled('FrtTransaction', 'FRTINT_TRANSACTION_PENDING')) THEN
+      
+      msg_ := Message_SYS.Construct('FRTINT_TRANSACTION_PENDING');
+      
+      -- Standard Event Parameters
+      fnd_user_ := Fnd_Session_API.Get_Fnd_User;
+      Message_SYS.Add_Attribute( msg_, 'EVENT_DATETIME', sysdate);  -- TBD Site_API.Get_Site_Date(contract_));
+      Message_SYS.Add_Attribute( msg_, 'USER_IDENTITY', fnd_user_);
+      Message_SYS.Add_Attribute( msg_, 'USER_DESCRIPTION', Fnd_User_API.Get_Description(fnd_user_));
+      Message_SYS.Add_Attribute( msg_, 'USER_MAIL_ADDRESS', Fnd_User_API.Get_Property(fnd_user_, 'SMTP_MAIL_ADDRESS'));
+      Message_SYS.Add_Attribute( msg_, 'USER_MOBILE_PHONE', Fnd_User_API.Get_Property(fnd_user_, 'MOBILE_PHONE'));
+      
+      -- Primary key for object
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF_TYPE_DB', rec_.source_ref_type);
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF', rec_.source_ref);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_MSG_TYPE_DB', rec_.freight_msg_type);
+      
+      Message_SYS.Add_Attribute( msg_, 'TRANSACTION_ID', rec_.transaction_id);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_PROVIDER_ID', rec_.freight_provider_id);
+      Message_SYS.Add_Attribute( msg_, 'SHIP_VIA_CODE', rec_.ship_via_code);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_ID', rec_.carrier_id);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_SERVICE', rec_.carrier_service);
+      Message_SYS.Add_Attribute( msg_, 'ERROR_TEXT', rec_.error_text);
+      
+      Event_SYS.Event_Execute('FrtTransaction', 'FRTINT_TRANSACTION_PENDING', msg_);
+   END IF;
+END Set_Pending;
+
+PROCEDURE Set_Void (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   attr_       VARCHAR2(32000);
+   objid_      VARCHAR2(2000);
+   objversion_ VARCHAR2(2000);
+   state_      VARCHAR2(2000);
+   info_       VARCHAR2(32000);
+   old_info_   VARCHAR2(32000);
+   rec_    FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   msg_      VARCHAR2(2000);
+   fnd_user_ VARCHAR2(30);
+BEGIN
+   old_info_ := Client_SYS.Get_All_Info;   
+   Client_SYS.Clear_Attr(attr_);
+   state_ := rec_.rowstate;
+   Get_Id_Version_By_Keys___(objid_, objversion_, source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   rec_   := Lock_By_Id___(objid_, objversion_);
+   Set_Void__(info_, objid_, objversion_, attr_, 'DO');
+   info_ := old_info_ || info_;
+   
+   IF (Event_SYS.Event_Enabled('FrtTransaction', 'FRTINT_TRANSACTION_VOID')) THEN
+      
+      msg_ := Message_SYS.Construct('FRTINT_TRANSACTION_VOID');
+      
+      -- Standard Event Parameters
+      fnd_user_ := Fnd_Session_API.Get_Fnd_User;
+      Message_SYS.Add_Attribute( msg_, 'EVENT_DATETIME', sysdate);  -- TBD Site_API.Get_Site_Date(contract_));
+      Message_SYS.Add_Attribute( msg_, 'USER_IDENTITY', fnd_user_);
+      Message_SYS.Add_Attribute( msg_, 'USER_DESCRIPTION', Fnd_User_API.Get_Description(fnd_user_));
+      Message_SYS.Add_Attribute( msg_, 'USER_MAIL_ADDRESS', Fnd_User_API.Get_Property(fnd_user_, 'SMTP_MAIL_ADDRESS'));
+      Message_SYS.Add_Attribute( msg_, 'USER_MOBILE_PHONE', Fnd_User_API.Get_Property(fnd_user_, 'MOBILE_PHONE'));
+      
+      -- Primary key for object
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF_TYPE_DB', rec_.source_ref_type);
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF', rec_.source_ref);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_MSG_TYPE_DB', rec_.freight_msg_type);
+      
+      Message_SYS.Add_Attribute( msg_, 'TRANSACTION_ID', rec_.transaction_id);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_PROVIDER_ID', rec_.freight_provider_id);
+      Message_SYS.Add_Attribute( msg_, 'SHIP_VIA_CODE', rec_.ship_via_code);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_ID', rec_.carrier_id);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_SERVICE', rec_.carrier_service);
+      Message_SYS.Add_Attribute( msg_, 'ERROR_TEXT', rec_.error_text);
+      
+      Event_SYS.Event_Execute('FrtTransaction', 'FRTINT_TRANSACTION_VOID', msg_);
+   END IF;
+END Set_Void;
+
+PROCEDURE Set_Completed (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   attr_       VARCHAR2(32000);
+   objid_      VARCHAR2(2000);
+   objversion_ VARCHAR2(2000);
+   state_      VARCHAR2(2000);
+   info_       VARCHAR2(32000);
+   old_info_   VARCHAR2(32000);
+   rec_    FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+   msg_      VARCHAR2(2000);
+   fnd_user_ VARCHAR2(30);
+BEGIN
+   old_info_ := Client_SYS.Get_All_Info;   
+   Client_SYS.Clear_Attr(attr_);
+   state_ := rec_.rowstate;
+   Get_Id_Version_By_Keys___(objid_, objversion_, source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   rec_   := Lock_By_Id___(objid_, objversion_);
+   Set_Completed__(info_, objid_, objversion_, attr_, 'DO');
+   info_ := old_info_ || info_;
+   
+   IF (Event_SYS.Event_Enabled('FrtTransaction', 'FRTINT_TRANSACTION_COMPLETED')) THEN
+      
+      msg_ := Message_SYS.Construct('FRTINT_TRANSACTION_COMPLETED');
+      
+      -- Standard Event Parameters
+      fnd_user_ := Fnd_Session_API.Get_Fnd_User;
+      Message_SYS.Add_Attribute( msg_, 'EVENT_DATETIME', sysdate);  -- TBD Site_API.Get_Site_Date(contract_));
+      Message_SYS.Add_Attribute( msg_, 'USER_IDENTITY', fnd_user_);
+      Message_SYS.Add_Attribute( msg_, 'USER_DESCRIPTION', Fnd_User_API.Get_Description(fnd_user_));
+      Message_SYS.Add_Attribute( msg_, 'USER_MAIL_ADDRESS', Fnd_User_API.Get_Property(fnd_user_, 'SMTP_MAIL_ADDRESS'));
+      Message_SYS.Add_Attribute( msg_, 'USER_MOBILE_PHONE', Fnd_User_API.Get_Property(fnd_user_, 'MOBILE_PHONE'));
+      
+      -- Primary key for object
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF_TYPE_DB', rec_.source_ref_type);
+      Message_SYS.Add_Attribute( msg_, 'SOURCE_REF', rec_.source_ref);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_MSG_TYPE_DB', rec_.freight_msg_type);
+      
+      Message_SYS.Add_Attribute( msg_, 'TRANSACTION_ID', rec_.transaction_id);
+      Message_SYS.Add_Attribute( msg_, 'FREIGHT_PROVIDER_ID', rec_.freight_provider_id);
+      Message_SYS.Add_Attribute( msg_, 'SHIP_VIA_CODE', rec_.ship_via_code);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_ID', rec_.carrier_id);
+      Message_SYS.Add_Attribute( msg_, 'CARRIER_SERVICE', rec_.carrier_service);
+      Message_SYS.Add_Attribute( msg_, 'ERROR_TEXT', rec_.error_text);
+      
+      Event_SYS.Event_Execute('FrtTransaction', 'FRTINT_TRANSACTION_COMPLETED', msg_);
+   END IF;
+END Set_Completed;
+
+PROCEDURE Set_Confirmed (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   attr_       VARCHAR2(32000);
+   objid_      VARCHAR2(2000);
+   objversion_ VARCHAR2(2000);
+   state_      VARCHAR2(2000);
+   info_       VARCHAR2(32000);
+   old_info_   VARCHAR2(32000);
+   rec_    FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_ FRT_TRANSACTION_TAB%ROWTYPE;
+BEGIN
+   old_info_ := Client_SYS.Get_All_Info;   
+   Client_SYS.Clear_Attr(attr_);
+   state_ := rec_.rowstate;
+   Get_Id_Version_By_Keys___(objid_, objversion_, source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   rec_   := Lock_By_Id___(objid_, objversion_);
+   Set_Confirmed__(info_, objid_, objversion_, attr_, 'DO');
+   info_ := old_info_ || info_;
+END Set_Confirmed;
+
+
+PROCEDURE Get_Id_Version_By_Keys (
+   objid_      IN OUT NOCOPY VARCHAR2,
+   objversion_ IN OUT NOCOPY VARCHAR2,
+   source_ref_type_db_ IN VARCHAR2,
+   source_ref_ IN VARCHAR2,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   CURSOR get_id IS 
+   SELECT objid, objversion   
+   FROM  frt_transaction
+   WHERE source_ref_type_db = source_ref_type_db_
+   AND   source_ref = source_ref_
+   AND   freight_msg_type_db = freight_msg_type_db_;
+BEGIN
+   
+   OPEN get_id;
+   FETCH get_id INTO objid_,objversion_;
+   CLOSE get_id;   
+   
+END Get_Id_Version_By_Keys;
+
+FUNCTION Get_Total_Transaction (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2) RETURN NUMBER   
+IS
+   cnt_ NUMBER;
+   CURSOR get_rec_count IS    
+   SELECT count(*)
+   FROM Frt_Transaction
+   WHERE source_ref_type_db = source_ref_type_db_
+   AND   source_ref = source_ref_
+   AND   freight_msg_type_db = freight_msg_type_db_
+ --  AND   objstate != 'Void'
+   ;
+   
+BEGIN
+	
+   cnt_ :=0;
+   OPEN get_rec_count;
+   FETCH get_rec_count INTO cnt_;
+   CLOSE get_rec_count;   
+   
+   cnt_ := nvl(cnt_,0);
+   
+   RETURN cnt_;
+   
+END Get_Total_Transaction;
+
+FUNCTION Check_Frt_Transaction (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2) RETURN VARCHAR2 
+IS
+   found_ VARCHAR2(5);
+BEGIN
+	found_ := 'FALSE';
+   IF (Frt_Transaction_API.Exists_Db(source_ref_type_db_,source_ref_,freight_msg_type_db_)) THEN
+      found_ := NULL;
+   END IF;
+	RETURN found_;
+END Check_Frt_Transaction;
+
+
+
+PROCEDURE Modify (
+   info_ IN OUT VARCHAR2 ,
+   attr_ IN OUT VARCHAR2,
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   oldrec_  FRT_TRANSACTION_TAB%ROWTYPE;
+   newrec_  FRT_TRANSACTION_TAB%ROWTYPE;
+   objid_      VARCHAR2(2000);
+   objversion_ VARCHAR2(2000);
+   indrec_     Indicator_Rec;   
+BEGIN
+   oldrec_ := Lock_By_Keys___(source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   newrec_ := oldrec_;
+   Unpack___(newrec_, indrec_, attr_);
+   Check_Update___(oldrec_, newrec_, indrec_, attr_);
+   Update___(objid_, oldrec_, newrec_, attr_, objversion_, TRUE);
+   info_ := Client_SYS.Get_All_Info; 
+END Modify;
+
+PROCEDURE Process_To_Complete (
+   source_ref_type_db_ IN VARCHAR2, 
+   source_ref_ IN VARCHAR2 ,
+   freight_msg_type_db_ IN VARCHAR2)
+IS
+   rec_  FRT_TRANSACTION_TAB%ROWTYPE;
+   attr_  VARCHAR2(1000);
+BEGIN
+   Trace_Sys.Message('source_ref_type_db_='||source_ref_type_db_||',freight_msg_type_db_='||freight_msg_type_db_||',source_ref_='||source_ref_);
+   rec_ := Lock_By_Keys___(source_ref_type_db_,source_ref_ , freight_msg_type_db_);
+   Process_To_Complete___( rec_ , attr_);
+END Process_To_Complete;
+
+-------------------- LU CUST NEW METHODS -------------------------------------
